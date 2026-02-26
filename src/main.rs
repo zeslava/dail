@@ -74,12 +74,12 @@ enum Commands {
     Images,
     /// Generate shell completions
     #[command(after_long_help = "\
-Setup (dynamic completions):
-  COMPLETE=zsh dail | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null
-  COMPLETE=bash dail | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null
-  COMPLETE=fish dail > ~/.config/fish/completions/dail.fish
+Dynamic completions (add to shell rc, enables live jail name completion):
+  zsh:  echo 'source <(COMPLETE=zsh dail)' >> ~/.zshrc
+  bash: echo 'source <(COMPLETE=bash dail)' >> ~/.bashrc
+  fish: COMPLETE=fish dail > ~/.config/fish/completions/dail.fish
 
-Legacy (static completions):
+Static completions (subcommands only, no live jail names):
   dail completions zsh | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null
   dail completions bash | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null
   dail completions fish > ~/.config/fish/completions/dail.fish")]
@@ -147,12 +147,12 @@ fn main() -> anyhow::Result<()> {
         }
         Commands::Completions { shell: None } => {
             println!("Generate shell completions for dail.\n");
-            println!("Dynamic completions (recommended):");
-            println!("  COMPLETE=zsh dail | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null");
-            println!("  COMPLETE=bash dail | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null");
-            println!("  COMPLETE=fish dail > ~/.config/fish/completions/dail.fish");
+            println!("Dynamic completions (add to shell rc, enables live jail name completion):");
+            println!("  zsh:  echo 'source <(COMPLETE=zsh dail)' >> ~/.zshrc");
+            println!("  bash: echo 'source <(COMPLETE=bash dail)' >> ~/.bashrc");
+            println!("  fish: COMPLETE=fish dail > ~/.config/fish/completions/dail.fish");
             println!();
-            println!("Legacy (static completions):");
+            println!("Static completions (subcommands only, no live jail names):");
             println!("  dail completions zsh | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null");
             println!("  dail completions bash | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null");
             println!("  dail completions fish > ~/.config/fish/completions/dail.fish");
