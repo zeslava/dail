@@ -1,0 +1,19 @@
+FROM 15.0-RELEASE
+
+# Keep jail alive without processes
+PARAM persist=true
+
+# Allow SysV IPC (required by PostgreSQL)
+PARAM allow.sysvipc=true
+
+RUN pkg install -y postgresql18-server
+
+SERVICE postgresql
+LOG /var/log/postgresql.log
+
+# Initialize the database cluster
+RUN service postgresql oneinitdb
+
+# Copy configs to listen on all interfaces
+COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
+COPY pg_hba.conf /var/db/postgres/data18/pg_hba.conf

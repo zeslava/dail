@@ -1,0 +1,18 @@
+version: "3"
+
+tasks:
+  build:
+    desc: Build release binary
+    cmds:
+      - cargo build --release
+
+  run:
+    desc: Build and run dail (pass args via CLI_ARGS)
+    cmds:
+      - cargo run -- {{.CLI_ARGS}}
+
+  install:
+    desc: Build release and install to /usr/local/bin
+    cmds:
+      - cargo build --release
+      - doas install -m 755 target/release/dail /usr/local/bin/dail

@@ -1,0 +1,12 @@
+FROM 15.0-RELEASE
+
+# Keep jail alive without processes
+PARAM persist=true
+
+RUN pkg install -y valkey-9.0.1
+
+SERVICE valkey
+LOG /var/log/valkey/valkey.log
+
+# Mount host data directory for persistence
+# MOUNT /data/valkey:/var/db/valkey

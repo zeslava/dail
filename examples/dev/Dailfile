@@ -1,0 +1,10 @@
+FROM 15.0-RELEASE
+
+# Development jail: raw sockets + SysV IPC
+PARAM allow.raw_sockets=true
+PARAM allow.sysvipc=true
+
+RUN pkg install -y git vim curl bash
+
+# Mount your project directory
+# MOUNT /home/user/project:/root/project
