@@ -3,6 +3,9 @@ name = "dail"
 version = "0.1.0"
 edition = "2024"
 license = "BSD-3-Clause"
+description = "Daily jail management for FreeBSD"
+homepage = "https://github.com/zeslava/dail"
+repository = "https://github.com/zeslava/dail"
 
 [[bin]]
 name = "dail"

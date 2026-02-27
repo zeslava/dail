@@ -1,0 +1,9 @@
+Dail is a convenient everyday FreeBSD jail manager.
+
+Features:
+- Dailfile for declarative jail builds
+- Presets for common workloads (postgres, nginx, dev)
+- Thick and thin jails
+- Networking: inherit, IP alias, VNET with bridge
+- ZFS snapshots, clones, and ZFS-backed storage
+- Resource limits via rctl
