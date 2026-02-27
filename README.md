@@ -3,8 +3,8 @@ Daily jail management for FreeBSD
 
 ## Features
 
-- **Docker-like workflow:** `create`, `start`, `stop`, `rm`, `run`, `exec`, `build`
-- **Dailfile:** declarative jail builds (like Dockerfile)
+- **Familiar workflow:** `create`, `start`, `stop`, `rm`, `run`, `exec`, `build`
+- **Dailfile:** declarative jail builds
 - **Presets:** one flag to configure common workloads (`--preset postgres`)
 - **Thick & thin jails:** full copy or shared base with per-jail overlay
 - **Networking:** inherit, IP alias, or VNET with bridge
@@ -196,12 +196,12 @@ dail image rm myjail:v1.0
 Dail supports dynamic completions — jail names, image refs and other values are completed at runtime.
 
 ```bash
-# Recommended: dynamic completions (tab-completes jail names, images, etc.)
-COMPLETE=zsh dail | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null
-COMPLETE=bash dail | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null
+# Dynamic completions (recommended — live jail name and image completion)
+echo 'source <(COMPLETE=zsh dail)' >> ~/.zshrc
+echo 'source <(COMPLETE=bash dail)' >> ~/.bashrc
 COMPLETE=fish dail > ~/.config/fish/completions/dail.fish
 
-# Legacy: static completions (subcommands and flags only)
+# Static completions (subcommands and flags only, no live names)
 dail completions zsh | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null
 dail completions bash | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null
 dail completions fish > ~/.config/fish/completions/dail.fish
