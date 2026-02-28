@@ -1,18 +1,18 @@
+mod build;
 mod commands;
+mod completions;
 mod error;
 mod freebsd;
+mod image;
 mod jail;
 mod network;
 mod output;
 mod storage;
 mod store;
-mod build;
-mod image;
-mod completions;
 
 use clap::{CommandFactory, Parser, Subcommand};
-use clap_complete::aot::Shell;
 use clap_complete::CompleteEnv;
+use clap_complete::aot::Shell;
 
 #[derive(Parser)]
 #[command(name = "dail", about = "FreeBSD jail manager", version)]
@@ -120,7 +120,24 @@ fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     // Most commands require root privileges (jail(2), mount, etc.)
-    if !matches!(cli.command, Commands::Completions { .. }) {
+    // Read-only commands don't need root
+    let requires_root = !matches!(
+        cli.command,
+        Commands::Completions { .. }
+            | Commands::Ls(..)
+            | Commands::Inspect(..)
+            | Commands::Logs(..)
+            | Commands::Images
+            | Commands::Image {
+                action: commands::image::ImageAction::Ls { .. }
+            }
+            | Commands::Config {
+                action: ConfigAction::Show
+            }
+            | Commands::Preset(..)
+    );
+
+    if requires_root {
         // SAFETY: getuid is always safe to call, no side effects
         if unsafe { libc::getuid() } != 0 {
             anyhow::bail!("dail requires root privileges. Run with doas or sudo.");
@@ -152,7 +169,9 @@ fn main() -> anyhow::Result<()> {
             CacheAction::Clean => commands::cache::clean()?,
         },
         Commands::Image { action } => commands::image::run(action)?,
-        Commands::Images => commands::image::run(commands::image::ImageAction::Ls { quiet: false })?,
+        Commands::Images => {
+            commands::image::run(commands::image::ImageAction::Ls { quiet: false })?
+        }
         Commands::Completions { shell: Some(shell) } => {
             clap_complete::generate(shell, &mut Cli::command(), "dail", &mut std::io::stdout());
         }
@@ -164,8 +183,12 @@ fn main() -> anyhow::Result<()> {
             println!("  fish: COMPLETE=fish dail > ~/.config/fish/completions/dail.fish");
             println!();
             println!("Static completions (subcommands only, no live jail names):");
-            println!("  dail completions zsh | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null");
-            println!("  dail completions bash | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null");
+            println!(
+                "  dail completions zsh | doas tee /usr/local/share/zsh/site-functions/_dail > /dev/null"
+            );
+            println!(
+                "  dail completions bash | doas tee /usr/local/etc/bash_completion.d/dail > /dev/null"
+            );
             println!("  dail completions fish > ~/.config/fish/completions/dail.fish");
         }
     }
