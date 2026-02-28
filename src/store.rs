@@ -1,7 +1,6 @@
 use std::collections::HashSet;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{Read, Write};
-use std::os::unix::io::AsRawFd;
 use std::path::PathBuf;
 
 use crate::error::DailError;
@@ -13,107 +12,18 @@ pub struct DailStore {
     jails: Vec<JailState>,
     state_path: PathBuf,
     jails_dir: PathBuf,
-    /// Held for the lifetime of DailStore to prevent concurrent access
-    _lock_file: File,
-}
-
-/// Acquire an exclusive flock on the given path. Creates the file if needed.
-fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
-    tracing::info!("acquire_lock: attempting to open/create {}", path.display());
-    let file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(false)
-        .open(path)
-        .map_err(|e| {
-            DailError::Other(format!(
-                "failed to open lock file {}: {}",
-                path.display(),
-                e
-            ))
-        })?;
-    tracing::info!(
-        "acquire_lock: file opened, attempting flock LOCK_EX on {}",
-        path.display()
-    );
-
-    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
-    tracing::info!("acquire_lock: flock completed with rc={}", rc);
-    if rc != 0 {
-        return Err(DailError::Other(format!(
-            "failed to acquire exclusive lock on {}",
-            path.display()
-        )));
-    }
-
-    Ok(file)
-}
-
-/// Acquire a shared flock on the given path (read-only).
-fn acquire_shared_lock(path: &std::path::Path) -> Result<File, DailError> {
-    let file = OpenOptions::new().read(true).open(path).map_err(|e| {
-        DailError::Other(format!(
-            "cannot read lock file {}: {}. Try running with doas/sudo if needed.",
-            path.display(),
-            e
-        ))
-    })?;
-
-    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_SH) };
-    if rc != 0 {
-        return Err(DailError::Other(format!(
-            "failed to acquire shared lock on {}",
-            path.display()
-        )));
-    }
-
-    Ok(file)
 }
 
 impl DailStore {
+    /// Open the store for reading and writing.
+    /// Uses atomic tmp-file writes (write to .tmp, rename to final name).
+    /// No file locks needed—atomicity is guaranteed by filesystem rename operation.
     pub fn new(config: &GlobalConfig) -> Result<Self, DailError> {
-        Self::new_internal(config, false)
-    }
-
-    /// Open the store in read-only mode with shared lock.
-    /// Suitable for commands that only read jail state (ls, inspect, logs).
-    pub fn new_readonly(config: &GlobalConfig) -> Result<Self, DailError> {
-        Self::new_internal(config, true)
-    }
-
-    fn new_internal(config: &GlobalConfig, readonly: bool) -> Result<Self, DailError> {
         let state_path = config.state_path();
         let jails_dir = config.jails_dir();
 
         tracing::info!(
-            "DailStore::new_internal: state_path={}, readonly={}",
-            state_path.display(),
-            readonly
-        );
-        let lock_path = state_path.with_extension("lock");
-        tracing::info!("DailStore: lock_path={}", lock_path.display());
-        let lock_file = if readonly {
-            // For readonly, we need shared lock only if lock file exists
-            if lock_path.exists() {
-                acquire_shared_lock(&lock_path)?
-            } else {
-                // No lock file yet, no jails to list
-                return Ok(Self {
-                    jails: Vec::new(),
-                    state_path,
-                    jails_dir,
-                    _lock_file: OpenOptions::new().read(true).open("/dev/null").unwrap(), // /dev/null always exists
-                });
-            }
-        } else {
-            tracing::info!("DailStore: acquiring exclusive lock for write mode");
-            let lock = acquire_lock(&lock_path)?;
-            tracing::info!("DailStore: exclusive lock acquired");
-            lock
-        };
-
-        tracing::info!(
-            "DailStore: lock acquired, now reading state from {}",
+            "DailStore::new: reading state from {}",
             state_path.display()
         );
         let jails = if state_path.exists() {
@@ -131,7 +41,6 @@ impl DailStore {
             match serde_json::from_str(&content) {
                 Ok(jails) => jails,
                 Err(e) => {
-                    // Backup corrupt file instead of silently discarding
                     let backup = state_path.with_extension("json.corrupt");
                     tracing::warn!(
                         "state.json is corrupt ({}), backing up to {}",
@@ -150,20 +59,60 @@ impl DailStore {
             jails,
             state_path,
             jails_dir,
-            _lock_file: lock_file,
         };
 
-        if !readonly {
-            tracing::info!("DailStore: starting reconcile_with_jls");
-            store.reconcile_with_jls();
-            tracing::info!("DailStore: reconcile_with_jls completed");
-        }
-
+        tracing::info!("DailStore: reconciling with jls");
+        store.reconcile_with_jls();
         tracing::info!(
-            "DailStore::new_internal() completed successfully, {} jails in store",
+            "DailStore initialized, {} jails in store",
             store.jails.len()
         );
         Ok(store)
+    }
+
+    /// Open the store in read-only mode.
+    /// No locks needed—just read the state.json file directly.
+    /// Safe for concurrent reads, and avoids deadlock issues entirely.
+    pub fn new_readonly(config: &GlobalConfig) -> Result<Self, DailError> {
+        let state_path = config.state_path();
+        let jails_dir = config.jails_dir();
+
+        tracing::info!(
+            "DailStore::new_readonly: reading state from {}",
+            state_path.display()
+        );
+        let jails = if state_path.exists() {
+            let mut content = String::new();
+            File::open(&state_path)
+                .map_err(|e| {
+                    DailError::Other(format!(
+                        "cannot read state file {}: {}",
+                        state_path.display(),
+                        e
+                    ))
+                })?
+                .read_to_string(&mut content)?;
+
+            match serde_json::from_str(&content) {
+                Ok(jails) => jails,
+                Err(e) => {
+                    tracing::warn!("state.json is corrupt ({}), returning empty list", e);
+                    Vec::new()
+                }
+            }
+        } else {
+            Vec::new()
+        };
+
+        tracing::info!(
+            "DailStore (readonly) initialized, {} jails in store",
+            jails.len()
+        );
+        Ok(Self {
+            jails,
+            state_path,
+            jails_dir,
+        })
     }
 
     /// Cross-reference state.json with `jls` output.

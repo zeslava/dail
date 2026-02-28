@@ -219,9 +219,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    tracing::info!("About to call build_jail_config for jail '{}'", jail_name);
     let (config, info) = shared::build_jail_config(jail_name.clone(), &common, &global, flags)?;
-    tracing::info!("build_jail_config completed");
 
     if let Some(ref image_ref_str) = args.image {
         // --image mode: extract image into jail root

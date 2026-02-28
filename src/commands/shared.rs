@@ -138,9 +138,7 @@ pub fn build_jail_config(
             Some("none") => NetworkConfig::None,
             _ => {
                 // Auto-allocate IP from pool
-                tracing::info!("Auto-allocating IP from pool {}", global.ip_pool);
-                let store = DailStore::new(global)?;
-                tracing::info!("DailStore created, retrieving used IPs...");
+                let store = DailStore::new_readonly(global)?;
                 let used: Vec<String> = store
                     .list()
                     .iter()
@@ -152,10 +150,8 @@ pub fn build_jail_config(
                         }
                     })
                     .collect();
-                tracing::info!("Found {} used IPs, finding next free one", used.len());
                 let auto_ip = next_free_ip(&global.ip_pool, &used)
                     .ok_or_else(|| anyhow::anyhow!("no free IPs in pool {}", global.ip_pool))?;
-                tracing::info!("Auto-allocated IP: {}", auto_ip);
                 allocated_ip = Some(auto_ip.clone());
                 NetworkConfig::Alias {
                     ip: auto_ip,
@@ -248,6 +244,5 @@ pub fn build_jail_config(
         base_release,
     };
 
-    tracing::info!("build_jail_config completed successfully");
     Ok((config, info))
 }
