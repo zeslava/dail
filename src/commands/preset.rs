@@ -20,7 +20,7 @@ pub fn run(_args: PresetArgs) -> anyhow::Result<()> {
 
     let mut table = crate::output::Table::new(vec!["NAME", "SOURCE", "DESCRIPTION"]);
     for p in &presets {
-        table.add_row(vec![p.name.clone(), p.source.clone(), p.description.clone()]);
+        table.add_row(vec![p.name.clone(), p.source.to_string(), p.description.clone()]);
     }
     table.print();
 

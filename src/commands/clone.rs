@@ -1,6 +1,7 @@
 use clap::Args;
 use clap_complete::engine::ArgValueCompleter;
 use crate::completions;
+use crate::image::ImageRef;
 use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
 use crate::network::{NetworkConfig, next_free_ip};
@@ -22,11 +23,9 @@ pub fn run(args: CloneArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global.clone())?;
 
-    let (source_name, tag) = if let Some((name, tag)) = args.source.split_once(':') {
-        (name, tag)
-    } else {
-        (args.source.as_str(), "latest")
-    };
+    let parsed = ImageRef::parse(&args.source)?;
+    let source_name = &parsed.name;
+    let tag = &parsed.tag;
 
     let source = lifecycle
         .get(source_name)

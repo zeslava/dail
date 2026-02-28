@@ -51,8 +51,9 @@ pub fn run(args: InspectArgs) -> anyhow::Result<()> {
         NetworkConfig::Alias { ip, interface } => {
             println!("Network:     alias ({ip} on {interface})");
         }
-        NetworkConfig::Vnet { ip, bridge } => {
-            println!("Network:     vnet ({ip} bridge {bridge})");
+        NetworkConfig::Vnet { ip, bridge, gateway } => {
+            let gw = gateway.as_deref().unwrap_or("none");
+            println!("Network:     vnet ({ip} bridge {bridge} gateway {gw})");
         }
         NetworkConfig::Inherit => println!("Network:     inherit"),
         NetworkConfig::None => println!("Network:     none"),

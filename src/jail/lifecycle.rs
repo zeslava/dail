@@ -6,7 +6,7 @@ use crate::storage;
 use crate::store::DailStore;
 use crate::freebsd::jail_sys::{JailParams, JailSys};
 use crate::freebsd::mount::NullfsMount;
-use crate::image::ImageStore;
+use crate::image::{ImageRef, ImageStore};
 
 pub struct JailLifecycle {
     config: GlobalConfig,
@@ -132,12 +132,11 @@ impl JailLifecycle {
     fn start_inner(&self, state: &JailState) -> Result<(i32, Option<String>), DailError> {
         // 1. Mount thin jail base + skeleton if applicable
         if state.config.jail_type == JailType::Thin {
-            let base_dir = if let Some(ref image_ref) = state.config.image_ref {
-                let (img_name, img_tag) = image_ref
-                    .split_once(':')
-                    .unwrap_or((image_ref.as_str(), "latest"));
+            let base_dir = if let Some(ref image_ref_str) = state.config.image_ref {
+                let image_ref = ImageRef::parse(image_ref_str)
+                    .map_err(|e| DailError::Config(format!("invalid image ref: {}", e)))?;
                 let image_store = ImageStore::new(&self.config);
-                image_store.ensure_rootfs(img_name, img_tag)?
+                image_store.ensure_rootfs(&image_ref.name, &image_ref.tag)?
             } else if let Some(ref release) = state.config.base {
                 let backend = storage::get_backend(&self.config);
                 backend.check_base(&self.config, release)?

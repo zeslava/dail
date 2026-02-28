@@ -1,6 +1,7 @@
 use clap::Args;
 use crate::build::executor::BuildExecutor;
 use crate::build::dailfile::Dailfile;
+use crate::image::ImageRef;
 use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
 
@@ -45,11 +46,9 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
     BuildExecutor::build(&mut lifecycle, &dailfile, &name, None, &context_dir)?;
 
     if let Some(ref tag_ref) = args.tag {
-        let (img_name, img_tag) = if let Some((n, t)) = tag_ref.split_once(':') {
-            (n, t)
-        } else {
-            (tag_ref.as_str(), "latest")
-        };
+        let image_ref = ImageRef::parse(tag_ref)?;
+        let img_name = &image_ref.name;
+        let img_tag = &image_ref.tag;
 
         let state = lifecycle.get(&name)
             .ok_or_else(|| anyhow::anyhow!("built jail '{}' not found in store", name))?

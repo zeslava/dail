@@ -8,6 +8,74 @@ use crate::error::DailError;
 use crate::jail::config::GlobalConfig;
 use crate::jail::state::JailState;
 
+/// An image reference in the format "name:tag"
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImageRef {
+    pub name: String,
+    pub tag: String,
+}
+
+impl ImageRef {
+    /// Parse an image reference string.
+    /// Format: "name:tag" or "name" (defaults to "latest")
+    /// 
+    /// Validation rules:
+    /// - name: starts with lowercase letter, then [a-z0-9_-]+
+    /// - tag: [a-zA-Z0-9_.-]+
+    pub fn parse(s: &str) -> Result<Self, DailError> {
+        let (name, tag) = match s.split_once(':') {
+            Some((n, t)) => (n, t),
+            None => (s, "latest"),
+        };
+
+        // Validate name
+        if name.is_empty() {
+            return Err(DailError::Image("image name cannot be empty".to_string()));
+        }
+        
+        let mut chars = name.chars();
+        // SAFETY: checked not empty above
+        let first = chars.next().unwrap();
+        if !first.is_ascii_lowercase() {
+            return Err(DailError::Image(format!(
+                "image name must start with a lowercase letter, got '{name}'"
+            )));
+        }
+        
+        for ch in chars {
+            if !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-' {
+                return Err(DailError::Image(format!(
+                    "image name contains invalid character '{ch}'. Allowed: [a-z0-9_-]"
+                )));
+            }
+        }
+
+        // Validate tag
+        if tag.is_empty() {
+            return Err(DailError::Image("image tag cannot be empty".to_string()));
+        }
+        
+        for ch in tag.chars() {
+            if !ch.is_ascii_alphanumeric() && ch != '_' && ch != '-' && ch != '.' {
+                return Err(DailError::Image(format!(
+                    "image tag contains invalid character '{ch}'. Allowed: [a-zA-Z0-9_.-]"
+                )));
+            }
+        }
+
+        Ok(Self {
+            name: name.to_string(),
+            tag: tag.to_string(),
+        })
+    }
+}
+
+impl std::fmt::Display for ImageRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.name, self.tag)
+    }
+}
+
 /// Create a tar archive compressed with zstd.
 /// Uses a safe pipe (tar stdout → zstd stdin) without shell interpolation.
 pub fn tar_create_zstd(

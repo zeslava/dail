@@ -103,7 +103,7 @@ pub struct PresetInfo {
     pub source: PresetSource,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PresetSource {
     Builtin,
     User,

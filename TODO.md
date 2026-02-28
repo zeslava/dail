@@ -27,9 +27,9 @@
 
 ## Phase 6: Code quality
 
-- [ ] **Extract shared builder** — deduplicate ~100 lines between `create.rs` and `run.rs`
+- [x] **Extract shared builder** — deduplicate ~100 lines between `create.rs` and `run.rs`
 - [ ] **Remove dead code** — audit `#[allow(dead_code)]` in `src/freebsd/mod.rs`
-- [ ] **Image ref parsing** — extract helper, used in 4+ places
+- [x] **Image ref parsing** — extract helper, used in 4+ places
 - [ ] **Deprecation** — migrate `serde_yaml` → `serde_yml` or drop YAML support (TOML only)
 
 ## Phase 7: Tests
@@ -45,7 +45,7 @@
 ## Phase 8: Packaging & docs
 
 - [ ] Man page (`dail.1`)
-- [ ] Document `--mount-ro` and `--network` flags in README
+- [x] Document `--mount-ro` and `--network` flags in README
 - [ ] Document COPY host-path behavior in Dailfile reference
 - [ ] Submit port to FreeBSD ports tree
 

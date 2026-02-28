@@ -22,6 +22,7 @@ fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
     let file = OpenOptions::new()
         .create(true)
         .write(true)
+        .truncate(false)
         .open(path)?;
 
     let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };

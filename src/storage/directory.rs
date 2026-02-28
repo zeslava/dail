@@ -73,10 +73,10 @@ impl StorageBackend for DirectoryBackend {
         for entry in std::fs::read_dir(&bases_dir)? {
             let entry = entry?;
             let path = entry.path();
-            if path.is_dir() {
-                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                    bases.push((name.to_string(), path));
-                }
+            if path.is_dir()
+                && let Some(name) = path.file_name().and_then(|n| n.to_str())
+            {
+                bases.push((name.to_string(), path));
             }
         }
         bases.sort_by(|a, b| a.0.cmp(&b.0));

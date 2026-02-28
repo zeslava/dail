@@ -265,6 +265,60 @@ limits:
   maxproc: "256"
 ```
 
+## Network Modes
+
+Dail supports multiple networking configurations:
+
+### Auto IP Allocation (default)
+
+When no network flags are specified, dail automatically allocates an IP from the configured pool:
+
+```bash
+dail run myjail                      # Auto-allocates 10.100.0.X
+# Output: IP allocated: 10.100.0.2 on lo0
+```
+
+Pool configured in `/usr/local/etc/dail/config.yaml`:
+
+```yaml
+ip_pool: 10.100.0.0/24
+alias_interface: lo0
+```
+
+### Explicit IP Alias
+
+Assign a specific IP address:
+
+```bash
+dail create web --ip 10.100.0.50/24
+```
+
+**Note:** Dail validates that the IP is not already in use by another jail.
+
+### VNET (Virtual Network)
+
+Full network stack isolation with bridged networking:
+
+```bash
+dail create app --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1 --vnet-bridge bridge0
+```
+
+### Host Network (inherit)
+
+Share the host's network stack:
+
+```bash
+dail create legacy --network inherit
+```
+
+### No Network (isolated)
+
+Completely isolated jail with no network access:
+
+```bash
+dail create isolated --network none
+```
+
 ## Configuration
 
 Global config at `/usr/local/etc/dail/config.yaml` (TOML fallback supported):

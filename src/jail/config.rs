@@ -144,8 +144,7 @@ impl GlobalConfig {
 
     pub fn save(&self) -> Result<(), DailError> {
         let path = self.config_path();
-        let content =
-            serde_yaml::to_string(self).map_err(|e| DailError::Config(e.to_string()))?;
+        let content = serde_yaml::to_string(self).map_err(|e| DailError::Config(e.to_string()))?;
         std::fs::write(path, content)?;
         Ok(())
     }
@@ -166,17 +165,12 @@ impl GlobalConfig {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum JailType {
     Thick,
+    #[default]
     Thin,
-}
-
-impl Default for JailType {
-    fn default() -> Self {
-        Self::Thin
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

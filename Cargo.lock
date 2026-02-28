@@ -196,6 +196,7 @@ dependencies = [
  "chrono",
  "clap",
  "clap_complete",
+ "libc",
  "serde",
  "serde_json",
  "serde_yaml",

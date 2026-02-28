@@ -28,7 +28,7 @@ pub fn run(args: BootstrapArgs) -> anyhow::Result<()> {
             println!("No bases bootstrapped yet.");
             println!("Use: dail bootstrap <RELEASE> (e.g. dail bootstrap 14.2-RELEASE)");
         } else {
-            println!("{:<30} {}", "RELEASE", "PATH");
+            println!("{:<30} PATH", "RELEASE");
             println!("{}", "-".repeat(60));
             for (name, path) in &bases {
                 println!("{:<30} {}", name, path.display());

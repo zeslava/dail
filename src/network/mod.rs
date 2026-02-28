@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::DailError;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(tag = "mode", rename_all = "lowercase")]
 pub enum NetworkConfig {
     Alias {
@@ -17,6 +17,7 @@ pub enum NetworkConfig {
         #[serde(default)]
         gateway: Option<String>,
     },
+    #[default]
     Inherit,
     None,
 }
@@ -29,12 +30,6 @@ fn default_bridge() -> String {
     "bridge0".to_string()
 }
 
-impl Default for NetworkConfig {
-    fn default() -> Self {
-        NetworkConfig::Inherit
-    }
-}
-
 /// Set up networking for a jail. Returns the epair base name (e.g. "epair0") for Vnet.
 pub fn setup_network(jail_name: &str, config: &NetworkConfig) -> Result<Option<String>, DailError> {
     use crate::freebsd::ifconfig::Ifconfig;
@@ -45,11 +40,17 @@ pub fn setup_network(jail_name: &str, config: &NetworkConfig) -> Result<Option<S
             Ifconfig::add_alias(interface, ip).map_err(|e| DailError::Network(e.to_string()))?;
             Ok(None)
         }
-        NetworkConfig::Vnet { bridge, ip, gateway } => {
+        NetworkConfig::Vnet {
+            bridge,
+            ip,
+            gateway,
+        } => {
             let pair = Ifconfig::create_epair().map_err(|e| DailError::Network(e.to_string()))?;
 
             // Extract base name (e.g. "epair0" from "epair0a")
-            let epair_base = pair.host_side.strip_suffix('a')
+            let epair_base = pair
+                .host_side
+                .strip_suffix('a')
                 .unwrap_or(&pair.host_side)
                 .to_string();
 
@@ -89,7 +90,11 @@ pub fn next_free_ip(subnet: &str, used: &[String]) -> Option<String> {
     }
 
     let base = u32::from_be_bytes([octets[0], octets[1], octets[2], octets[3]]);
-    let mask = if prefix == 0 { 0u32 } else { !0u32 << (32 - prefix) };
+    let mask = if prefix == 0 {
+        0u32
+    } else {
+        !0u32 << (32 - prefix)
+    };
     let network = base & mask;
 
     for host in 2u32..=254 {
@@ -107,7 +112,11 @@ pub fn next_free_ip(subnet: &str, used: &[String]) -> Option<String> {
     None
 }
 
-pub fn teardown_network(_jail_name: &str, config: &NetworkConfig, epair: Option<&str>) -> Result<(), DailError> {
+pub fn teardown_network(
+    _jail_name: &str,
+    config: &NetworkConfig,
+    epair: Option<&str>,
+) -> Result<(), DailError> {
     use crate::freebsd::ifconfig::Ifconfig;
 
     match config {
