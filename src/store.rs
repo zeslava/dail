@@ -22,10 +22,6 @@ impl DailStore {
         let state_path = config.state_path();
         let jails_dir = config.jails_dir();
 
-        tracing::info!(
-            "DailStore::new: reading state from {}",
-            state_path.display()
-        );
         let jails = if state_path.exists() {
             let mut content = String::new();
             File::open(&state_path)
@@ -61,12 +57,7 @@ impl DailStore {
             jails_dir,
         };
 
-        tracing::info!("DailStore: reconciling with jls");
         store.reconcile_with_jls();
-        tracing::info!(
-            "DailStore initialized, {} jails in store",
-            store.jails.len()
-        );
         Ok(store)
     }
 
@@ -77,10 +68,6 @@ impl DailStore {
         let state_path = config.state_path();
         let jails_dir = config.jails_dir();
 
-        tracing::info!(
-            "DailStore::new_readonly: reading state from {}",
-            state_path.display()
-        );
         let jails = if state_path.exists() {
             let mut content = String::new();
             File::open(&state_path)
@@ -104,10 +91,6 @@ impl DailStore {
             Vec::new()
         };
 
-        tracing::info!(
-            "DailStore (readonly) initialized, {} jails in store",
-            jails.len()
-        );
         Ok(Self {
             jails,
             state_path,
@@ -118,21 +101,16 @@ impl DailStore {
     /// Cross-reference state.json with `jls` output.
     /// Fixes stale "running" status after host reboot or jail crash.
     fn reconcile_with_jls(&mut self) {
-        tracing::info!("reconcile_with_jls: calling JailSys::list()");
         let running_names: HashSet<String> = JailSys::list()
             .unwrap_or_default()
             .into_iter()
             .map(|j| j.name)
             .collect();
-        tracing::info!(
-            "reconcile_with_jls: JailSys::list() completed, {} jails running",
-            running_names.len()
-        );
 
         let mut changed = false;
         for jail in &mut self.jails {
             if jail.status == JailStatus::Running && !running_names.contains(&jail.config.name) {
-                tracing::info!(
+                tracing::debug!(
                     "jail '{}' marked as running but not found in jls, marking as stopped",
                     jail.config.name
                 );
