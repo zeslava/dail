@@ -23,12 +23,40 @@ fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
         .create(true)
         .write(true)
         .truncate(false)
-        .open(path)?;
+        .open(path)
+        .map_err(|e| {
+            DailError::Other(format!(
+                "failed to open lock file {}: {}",
+                path.display(),
+                e
+            ))
+        })?;
 
     let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
     if rc != 0 {
         return Err(DailError::Other(format!(
-            "failed to acquire lock on {}",
+            "failed to acquire exclusive lock on {}",
+            path.display()
+        )));
+    }
+
+    Ok(file)
+}
+
+/// Acquire a shared flock on the given path (read-only).
+fn acquire_shared_lock(path: &std::path::Path) -> Result<File, DailError> {
+    let file = OpenOptions::new().read(true).open(path).map_err(|e| {
+        DailError::Other(format!(
+            "cannot read lock file {}: {}. Try running with doas/sudo if needed.",
+            path.display(),
+            e
+        ))
+    })?;
+
+    let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_SH) };
+    if rc != 0 {
+        return Err(DailError::Other(format!(
+            "failed to acquire shared lock on {}",
             path.display()
         )));
     }
@@ -38,15 +66,48 @@ fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
 
 impl DailStore {
     pub fn new(config: &GlobalConfig) -> Result<Self, DailError> {
+        Self::new_internal(config, false)
+    }
+
+    /// Open the store in read-only mode with shared lock.
+    /// Suitable for commands that only read jail state (ls, inspect, logs).
+    pub fn new_readonly(config: &GlobalConfig) -> Result<Self, DailError> {
+        Self::new_internal(config, true)
+    }
+
+    fn new_internal(config: &GlobalConfig, readonly: bool) -> Result<Self, DailError> {
         let state_path = config.state_path();
         let jails_dir = config.jails_dir();
 
         let lock_path = state_path.with_extension("lock");
-        let lock_file = acquire_lock(&lock_path)?;
+        let lock_file = if readonly {
+            // For readonly, we need shared lock only if lock file exists
+            if lock_path.exists() {
+                acquire_shared_lock(&lock_path)?
+            } else {
+                // No lock file yet, no jails to list
+                return Ok(Self {
+                    jails: Vec::new(),
+                    state_path,
+                    jails_dir,
+                    _lock_file: OpenOptions::new().read(true).open("/dev/null").unwrap(), // /dev/null always exists
+                });
+            }
+        } else {
+            acquire_lock(&lock_path)?
+        };
 
         let jails = if state_path.exists() {
             let mut content = String::new();
-            File::open(&state_path)?.read_to_string(&mut content)?;
+            File::open(&state_path)
+                .map_err(|e| {
+                    DailError::Other(format!(
+                        "cannot read state file {}: {}",
+                        state_path.display(),
+                        e
+                    ))
+                })?
+                .read_to_string(&mut content)?;
 
             match serde_json::from_str(&content) {
                 Ok(jails) => jails,
@@ -73,7 +134,9 @@ impl DailStore {
             _lock_file: lock_file,
         };
 
-        store.reconcile_with_jls();
+        if !readonly {
+            store.reconcile_with_jls();
+        }
 
         Ok(store)
     }
@@ -110,8 +173,8 @@ impl DailStore {
         let jail_dir = self.jails_dir.join(state.name());
         std::fs::create_dir_all(&jail_dir)?;
         let jail_json = jail_dir.join("dail.json");
-        let content = serde_json::to_string_pretty(&state)
-            .map_err(|e| DailError::Other(e.to_string()))?;
+        let content =
+            serde_json::to_string_pretty(&state).map_err(|e| DailError::Other(e.to_string()))?;
         std::fs::write(&jail_json, content)?;
 
         self.jails.push(state);
@@ -122,11 +185,7 @@ impl DailStore {
         self.jails.iter().find(|j| j.config.name == name)
     }
 
-    pub fn update(
-        &mut self,
-        name: &str,
-        f: impl FnOnce(&mut JailState),
-    ) -> Result<(), DailError> {
+    pub fn update(&mut self, name: &str, f: impl FnOnce(&mut JailState)) -> Result<(), DailError> {
         let state = self
             .jails
             .iter_mut()
@@ -137,8 +196,8 @@ impl DailStore {
 
         let jail_dir = self.jails_dir.join(name);
         let jail_json = jail_dir.join("dail.json");
-        let content = serde_json::to_string_pretty(state)
-            .map_err(|e| DailError::Other(e.to_string()))?;
+        let content =
+            serde_json::to_string_pretty(state).map_err(|e| DailError::Other(e.to_string()))?;
         std::fs::write(&jail_json, content)?;
 
         self.save_index()

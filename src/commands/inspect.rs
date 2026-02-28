@@ -20,7 +20,7 @@ pub struct InspectArgs {
 
 pub fn run(args: InspectArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
-    let lifecycle = JailLifecycle::new(global)?;
+    let lifecycle = JailLifecycle::new_readonly(global)?;
 
     let state = lifecycle
         .get(&args.name)

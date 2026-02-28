@@ -35,7 +35,7 @@ pub struct LogsArgs {
 
 pub fn run(args: LogsArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
-    let lifecycle = JailLifecycle::new(global.clone())?;
+    let lifecycle = JailLifecycle::new_readonly(global.clone())?;
 
     let state = lifecycle
         .get(&args.name)

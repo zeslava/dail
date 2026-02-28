@@ -1,12 +1,12 @@
 use crate::error::DailError;
+use crate::freebsd::jail_sys::{JailParams, JailSys};
+use crate::freebsd::mount::NullfsMount;
+use crate::image::{ImageRef, ImageStore};
 use crate::jail::config::{GlobalConfig, JailConfig, JailType};
 use crate::jail::state::{JailState, JailStatus};
 use crate::network::{self, NetworkConfig};
 use crate::storage;
 use crate::store::DailStore;
-use crate::freebsd::jail_sys::{JailParams, JailSys};
-use crate::freebsd::mount::NullfsMount;
-use crate::image::{ImageRef, ImageStore};
 
 pub struct JailLifecycle {
     config: GlobalConfig,
@@ -39,6 +39,13 @@ fn validate_jail_name(name: &str) -> Result<(), DailError> {
 impl JailLifecycle {
     pub fn new(config: GlobalConfig) -> Result<Self, DailError> {
         let store = DailStore::new(&config)?;
+        Ok(Self { config, store })
+    }
+
+    /// Create a lifecycle instance in read-only mode (shared lock, no reconcile).
+    /// Suitable for ls, inspect, logs commands.
+    pub fn new_readonly(config: GlobalConfig) -> Result<Self, DailError> {
+        let store = DailStore::new_readonly(&config)?;
         Ok(Self { config, store })
     }
 
@@ -165,7 +172,10 @@ impl JailLifecycle {
         // 3. Mount nullfs volumes
         for mount in &state.config.mounts {
             let target = state.root_path.join(
-                mount.destination.strip_prefix("/").unwrap_or(&mount.destination),
+                mount
+                    .destination
+                    .strip_prefix("/")
+                    .unwrap_or(&mount.destination),
             );
             std::fs::create_dir_all(&target)?;
             NullfsMount::mount(&mount.source, &target, mount.readonly)?;
@@ -218,7 +228,10 @@ impl JailLifecycle {
             if let Some(parent) = log_path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            std::fs::OpenOptions::new().create(true).append(true).open(&log_path)?;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)?;
             std::fs::set_permissions(&log_path, std::fs::Permissions::from_mode(0o666))?;
         }
 
@@ -236,7 +249,10 @@ impl JailLifecycle {
         // Unmount nullfs in reverse order
         for mount in state.config.mounts.iter().rev() {
             let target = state.root_path.join(
-                mount.destination.strip_prefix("/").unwrap_or(&mount.destination),
+                mount
+                    .destination
+                    .strip_prefix("/")
+                    .unwrap_or(&mount.destination),
             );
             let _ = NullfsMount::force_unmount(&target);
         }
@@ -288,7 +304,10 @@ impl JailLifecycle {
         // Unmount nullfs in reverse order
         for mount in mounts.iter().rev() {
             let target = root_path.join(
-                mount.destination.strip_prefix("/").unwrap_or(&mount.destination),
+                mount
+                    .destination
+                    .strip_prefix("/")
+                    .unwrap_or(&mount.destination),
             );
             let _ = NullfsMount::force_unmount(&target);
         }
@@ -363,11 +382,19 @@ impl JailLifecycle {
         self.store.get(name)
     }
 
-    pub fn store_update(&mut self, name: &str, f: impl FnOnce(&mut JailState)) -> Result<(), DailError> {
+    pub fn store_update(
+        &mut self,
+        name: &str,
+        f: impl FnOnce(&mut JailState),
+    ) -> Result<(), DailError> {
         self.store.update(name, f)
     }
 
-    pub fn exec(&self, name: &str, command: &[&str]) -> Result<std::process::ExitStatus, DailError> {
+    pub fn exec(
+        &self,
+        name: &str,
+        command: &[&str],
+    ) -> Result<std::process::ExitStatus, DailError> {
         let state = self
             .store
             .get(name)

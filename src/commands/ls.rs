@@ -26,7 +26,7 @@ pub struct LsArgs {
 
 pub fn run(args: LsArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
-    let lifecycle = JailLifecycle::new(global)?;
+    let lifecycle = JailLifecycle::new_readonly(global)?;
 
     let jails: Vec<_> = lifecycle
         .list()
