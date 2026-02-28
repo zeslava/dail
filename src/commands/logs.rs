@@ -17,19 +17,19 @@ Examples:
   dail logs myjail --file /var/log/messages")]
 pub struct LogsArgs {
     /// Jail name
-    #[arg(add = ArgValueCompleter::new(completions::complete_jail_names), display_order = 1)]
+    #[arg(add = ArgValueCompleter::new(completions::complete_jail_names))]
     pub name: String,
 
     /// Read a file from jail rootfs instead of cmd.log
-    #[arg(long, display_order = 1000)]
+    #[arg(long)]
     pub file: Option<String>,
 
     /// Follow log output (like tail -f)
-    #[arg(short, long, display_order = 1000)]
+    #[arg(short, long)]
     pub follow: bool,
 
     /// Number of lines to show from the end
-    #[arg(long, display_order = 1000)]
+    #[arg(long)]
     pub tail: Option<usize>,
 }
 
