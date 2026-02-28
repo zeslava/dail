@@ -19,6 +19,7 @@ pub struct DailStore {
 
 /// Acquire an exclusive flock on the given path. Creates the file if needed.
 fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
+    tracing::info!("acquire_lock: attempting to open/create {}", path.display());
     let file = OpenOptions::new()
         .create(true)
         .write(true)
@@ -31,8 +32,13 @@ fn acquire_lock(path: &std::path::Path) -> Result<File, DailError> {
                 e
             ))
         })?;
+    tracing::info!(
+        "acquire_lock: file opened, attempting flock LOCK_EX on {}",
+        path.display()
+    );
 
     let rc = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX) };
+    tracing::info!("acquire_lock: flock completed with rc={}", rc);
     if rc != 0 {
         return Err(DailError::Other(format!(
             "failed to acquire exclusive lock on {}",
@@ -79,7 +85,13 @@ impl DailStore {
         let state_path = config.state_path();
         let jails_dir = config.jails_dir();
 
+        tracing::info!(
+            "DailStore::new_internal: state_path={}, readonly={}",
+            state_path.display(),
+            readonly
+        );
         let lock_path = state_path.with_extension("lock");
+        tracing::info!("DailStore: lock_path={}", lock_path.display());
         let lock_file = if readonly {
             // For readonly, we need shared lock only if lock file exists
             if lock_path.exists() {
@@ -94,9 +106,16 @@ impl DailStore {
                 });
             }
         } else {
-            acquire_lock(&lock_path)?
+            tracing::info!("DailStore: acquiring exclusive lock for write mode");
+            let lock = acquire_lock(&lock_path)?;
+            tracing::info!("DailStore: exclusive lock acquired");
+            lock
         };
 
+        tracing::info!(
+            "DailStore: lock acquired, now reading state from {}",
+            state_path.display()
+        );
         let jails = if state_path.exists() {
             let mut content = String::new();
             File::open(&state_path)
@@ -135,20 +154,31 @@ impl DailStore {
         };
 
         if !readonly {
+            tracing::info!("DailStore: starting reconcile_with_jls");
             store.reconcile_with_jls();
+            tracing::info!("DailStore: reconcile_with_jls completed");
         }
 
+        tracing::info!(
+            "DailStore::new_internal() completed successfully, {} jails in store",
+            store.jails.len()
+        );
         Ok(store)
     }
 
     /// Cross-reference state.json with `jls` output.
     /// Fixes stale "running" status after host reboot or jail crash.
     fn reconcile_with_jls(&mut self) {
+        tracing::info!("reconcile_with_jls: calling JailSys::list()");
         let running_names: HashSet<String> = JailSys::list()
             .unwrap_or_default()
             .into_iter()
             .map(|j| j.name)
             .collect();
+        tracing::info!(
+            "reconcile_with_jls: JailSys::list() completed, {} jails running",
+            running_names.len()
+        );
 
         let mut changed = false;
         for jail in &mut self.jails {
