@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use crate::error::DailError;
 use crate::jail::config::{GlobalConfig, JailConfig, JailType};
 use crate::jail::state::JailState;
-use crate::storage::{freebsd_arch, StorageBackend};
+use crate::storage::{StorageBackend, freebsd_arch};
 
 pub struct DirectoryBackend;
 
@@ -26,7 +26,7 @@ impl StorageBackend for DirectoryBackend {
 
         let arch = freebsd_arch();
         let url = format!("{}/{arch}/{release}/base.txz", config.mirror);
-        eprintln!("Downloading {url}");
+        tracing::info!("Downloading {}", url);
 
         let fetch = std::process::Command::new("fetch")
             .args(["-o", "-", &url])
@@ -35,7 +35,7 @@ impl StorageBackend for DirectoryBackend {
             .spawn()
             .map_err(|e| DailError::Storage(format!("failed to start fetch: {e}")))?;
 
-        eprintln!("Extracting base system...");
+        tracing::info!("Extracting base system to {}", base_dir.display());
         let tar_status = std::process::Command::new("tar")
             .args(["-xf", "-", "-C"])
             .arg(&base_dir)
@@ -57,12 +57,20 @@ impl StorageBackend for DirectoryBackend {
     fn check_base(&self, config: &GlobalConfig, release: &str) -> Result<PathBuf, DailError> {
         let base_dir = Self::base_dir(config, release);
         if !base_dir.exists() {
-            tracing::error!("Base system '{}' not found at {}", release, base_dir.display());
+            tracing::error!(
+                "Base system '{}' not found at {}",
+                release,
+                base_dir.display()
+            );
             return Err(DailError::Storage(format!(
                 "base '{release}' not found. Run: dail bootstrap {release}"
             )));
         }
-        tracing::info!("Using base system '{}' from {}", release, base_dir.display());
+        tracing::info!(
+            "Using base system '{}' from {}",
+            release,
+            base_dir.display()
+        );
         Ok(base_dir)
     }
 

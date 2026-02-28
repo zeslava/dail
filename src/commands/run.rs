@@ -182,9 +182,10 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     {
         // Treat as Dailfile path, use jail name as generated
         let generated_name = format!("dail-build-{}", Uuid::new_v4().to_string()[..8].to_string());
-        eprintln!(
-            "[run] Building from {} (jail name: {})",
-            name_or_path, generated_name
+        tracing::info!(
+            "Building from {} (generated jail name: {})",
+            name_or_path,
+            generated_name
         );
         args.build = Some(name_or_path);
         args.name = Some(generated_name);
