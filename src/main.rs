@@ -108,11 +108,20 @@ enum ConfigAction {
 }
 
 fn main() -> anyhow::Result<()> {
+    // Initialize tracing with INFO level by default (no RUST_LOG needed)
+    // Respects RUST_LOG env var if set for finer control
+    let env_filter = if std::env::var("RUST_LOG").is_ok() {
+        tracing_subscriber::EnvFilter::from_default_env()
+    } else {
+        tracing_subscriber::EnvFilter::new("dail=info")
+    };
+
     tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("dail=info".parse().unwrap()),
-        )
+        .with_writer(std::io::stderr)
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .with_level(true)
+        .compact()
         .init();
 
     CompleteEnv::with_factory(Cli::command).complete();

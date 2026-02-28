@@ -104,6 +104,40 @@ pub struct RunArgs {
     pub image: Option<String>,
 }
 
+/// Find Dailfile by pattern (*.Dailfile or *.dailfile)
+fn find_dailfile_pattern() -> Option<String> {
+    use std::fs;
+
+    if let Ok(entries) = fs::read_dir(".") {
+        let mut dailfiles: Vec<_> = entries
+            .filter_map(|entry| {
+                entry.ok().and_then(|e| {
+                    let path = e.path();
+                    let filename = path.file_name()?;
+                    let name = filename.to_str()?;
+
+                    // Match *.Dailfile or *.dailfile
+                    if (name.ends_with(".Dailfile") || name.ends_with(".dailfile"))
+                        && path.is_file()
+                    {
+                        Some(name.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        // Sort for consistent behavior
+        dailfiles.sort();
+
+        // Return first match
+        dailfiles.into_iter().next()
+    } else {
+        None
+    }
+}
+
 pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global.clone())?;
@@ -112,31 +146,48 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let name_or_path = match args.name {
         Some(n) => n,
         None => {
+            tracing::info!("No jail name provided, looking for Dailfile...");
+
+            // Try exact matches first
             if std::path::Path::new("Dailfile").exists() {
+                tracing::info!("Found ./Dailfile");
                 "Dailfile".to_string()
             } else if std::path::Path::new("dailfile").exists() {
+                tracing::info!("Found ./dailfile");
                 "dailfile".to_string()
             } else {
-                anyhow::bail!(
-                    "No jail name provided and no Dailfile found in current directory.\nUsage: dail run <jail-name> [OPTIONS] or dail run [OPTIONS]"
-                );
+                // Try pattern matches: *.Dailfile or *.dailfile
+                match find_dailfile_pattern() {
+                    Some(path) => {
+                        tracing::info!("Found {}", path);
+                        path
+                    }
+                    None => {
+                        anyhow::bail!(
+                            "No jail name provided and no Dailfile found in current directory.\nUsage: dail run <jail-name> [OPTIONS] or dail run [OPTIONS]"
+                        );
+                    }
+                }
             }
         }
     };
 
     // Auto-detect Dailfile mode: if name looks like a file path (contains / or is named Dailfile)
     if args.build.is_none()
-        && (name_or_path.ends_with(".dailfile")
+        && (name_or_path.ends_with(".Dailfile")
+            || name_or_path.ends_with(".dailfile")
             || name_or_path == "Dailfile"
             || name_or_path == "dailfile"
             || name_or_path.contains('/'))
     {
         // Treat as Dailfile path, use jail name as generated
+        let generated_name = format!("dail-build-{}", Uuid::new_v4().to_string()[..8].to_string());
+        eprintln!(
+            "[run] Building from {} (jail name: {})",
+            name_or_path, generated_name
+        );
         args.build = Some(name_or_path);
-        args.name = Some(format!(
-            "dail-build-{}",
-            Uuid::new_v4().to_string()[..8].to_string()
-        ));
+        args.name = Some(generated_name);
     } else {
         args.name = Some(name_or_path);
     }

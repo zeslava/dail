@@ -1,4 +1,4 @@
-use crate::build::dailfile::{Instruction, Dailfile};
+use crate::build::dailfile::{Dailfile, Instruction};
 use crate::error::DailError;
 use crate::freebsd::mount::NullfsMount;
 use crate::jail::config::{JailConfig, MountSpec};
@@ -30,7 +30,11 @@ impl BuildExecutor {
                         jail_config.params.insert(key.clone(), value.clone());
                     }
                 }
-                Instruction::Mount { source, destination, readonly } => {
+                Instruction::Mount {
+                    source,
+                    destination,
+                    readonly,
+                } => {
                     jail_config.mounts.push(MountSpec {
                         source: source.into(),
                         destination: destination.into(),
@@ -49,7 +53,10 @@ impl BuildExecutor {
         }
 
         // SERVICE sets default CMD if no explicit CMD was given
-        let has_explicit_cmd = dailfile.instructions.iter().any(|i| matches!(i, Instruction::Cmd { .. }));
+        let has_explicit_cmd = dailfile
+            .instructions
+            .iter()
+            .any(|i| matches!(i, Instruction::Cmd { .. }));
         if !has_explicit_cmd {
             for instruction in &dailfile.instructions {
                 if let Instruction::Service { name } = instruction {
@@ -70,13 +77,16 @@ impl BuildExecutor {
         }
 
         let jail_config_final = jail_config.clone();
+        tracing::info!("Creating jail '{}'", name);
         lifecycle.create(jail_config)?;
+        tracing::info!("Jail '{}' created", name);
 
-        let has_run_or_copy = dailfile.instructions.iter().any(|i| {
-            matches!(i, Instruction::Run { .. } | Instruction::Copy { .. })
-        });
-
+        let has_run_or_copy = dailfile
+            .instructions
+            .iter()
+            .any(|i| matches!(i, Instruction::Run { .. } | Instruction::Copy { .. }));
         if has_run_or_copy {
+            tracing::info!("Starting jail '{}' for build", name);
             // During build: persist=true to stay alive between RUN steps,
             // inherit network for pkg access, no CMD yet
             lifecycle.store_update(name, |s| {
@@ -87,9 +97,11 @@ impl BuildExecutor {
             lifecycle.start(name)?;
 
             // Copy resolv.conf from host so pkg can resolve DNS
-            let root_path = lifecycle.get(name)
+            let root_path = lifecycle
+                .get(name)
                 .ok_or_else(|| DailError::Build("jail not found".into()))?
-                .root_path.clone();
+                .root_path
+                .clone();
             let host_resolv = std::path::Path::new("/etc/resolv.conf");
             if host_resolv.exists() {
                 let _ = std::fs::copy(host_resolv, root_path.join("etc/resolv.conf"));
@@ -102,10 +114,8 @@ impl BuildExecutor {
                 std::fs::create_dir_all(&jail_pkg_dir)?;
                 std::fs::copy(host_pkg, jail_pkg_dir.join("pkg-static"))?;
                 // pkg(8) bootstraps by checking for /usr/local/sbin/pkg
-                let _ = std::fs::hard_link(
-                    jail_pkg_dir.join("pkg-static"),
-                    jail_pkg_dir.join("pkg"),
-                );
+                let _ =
+                    std::fs::hard_link(jail_pkg_dir.join("pkg-static"), jail_pkg_dir.join("pkg"));
             }
 
             // Mount shared pkg cache (downloaded packages + repo metadata)
@@ -125,7 +135,7 @@ impl BuildExecutor {
                 for instruction in &dailfile.instructions {
                     match instruction {
                         Instruction::Run { command } => {
-                            tracing::info!("RUN {command}");
+                            tracing::info!("RUN {}", command);
                             let status = lifecycle.exec(name, &["/bin/sh", "-c", command])?;
                             if !status.success() {
                                 return Err(DailError::Build(format!(
@@ -134,12 +144,18 @@ impl BuildExecutor {
                                 )));
                             }
                         }
-                        Instruction::Copy { source, destination } => {
-                            tracing::info!("COPY {source} -> {destination}");
-                            let jail_state = lifecycle.get(name)
+                        Instruction::Copy {
+                            source,
+                            destination,
+                        } => {
+                            tracing::info!("COPY {} -> {}", source, destination);
+                            let jail_state = lifecycle
+                                .get(name)
                                 .ok_or_else(|| DailError::Build("jail not found".into()))?;
                             let dst = jail_state.root_path.join(
-                                destination.strip_prefix("/").unwrap_or(destination.as_str()),
+                                destination
+                                    .strip_prefix("/")
+                                    .unwrap_or(destination.as_str()),
                             );
                             if let Some(parent) = dst.parent() {
                                 std::fs::create_dir_all(parent)?;
@@ -166,28 +182,38 @@ impl BuildExecutor {
                             }
                         }
                         Instruction::Env { key, value } => {
-                            tracing::info!("ENV {key}={value}");
+                            tracing::info!("ENV {}={}", key, value);
                             let profile = root_path.join("etc/profile");
                             use std::io::Write;
                             let mut f = std::fs::OpenOptions::new()
                                 .create(true)
                                 .append(true)
                                 .open(&profile)
-                                .map_err(|e| DailError::Build(format!("failed to write /etc/profile: {e}")))?;
-                            writeln!(f, "export {key}=\"{value}\"")
-                                .map_err(|e| DailError::Build(format!("failed to write /etc/profile: {e}")))?;
+                                .map_err(|e| {
+                                    DailError::Build(format!("failed to write /etc/profile: {e}"))
+                                })?;
+                            writeln!(f, "export {key}=\"{value}\"").map_err(|e| {
+                                DailError::Build(format!("failed to write /etc/profile: {e}"))
+                            })?;
                         }
                         Instruction::Service { name: svc } => {
-                            tracing::info!("SERVICE {svc}");
+                            tracing::info!("SERVICE {}", svc);
                             let rc_conf = root_path.join("etc/rc.conf");
                             use std::io::Write;
                             let mut f = std::fs::OpenOptions::new()
                                 .create(true)
                                 .append(true)
                                 .open(&rc_conf)
-                                .map_err(|e| DailError::Build(format!("SERVICE {svc}: failed to write rc.conf: {e}")))?;
-                            writeln!(f, "{svc}_enable=\"YES\"")
-                                .map_err(|e| DailError::Build(format!("SERVICE {svc}: failed to write rc.conf: {e}")))?;
+                                .map_err(|e| {
+                                    DailError::Build(format!(
+                                        "SERVICE {svc}: failed to write rc.conf: {e}"
+                                    ))
+                                })?;
+                            writeln!(f, "{svc}_enable=\"YES\"").map_err(|e| {
+                                DailError::Build(format!(
+                                    "SERVICE {svc}: failed to write rc.conf: {e}"
+                                ))
+                            })?;
                         }
                         _ => {}
                     }
@@ -204,6 +230,7 @@ impl BuildExecutor {
             exec_result?;
 
             // Restore final config: original params, cmd, network
+            tracing::info!("Build completed for jail '{}'", name);
             lifecycle.store_update(name, |s| {
                 s.config.persist = jail_config_final.persist;
                 s.config.network = jail_config_final.network.clone();
