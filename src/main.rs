@@ -103,6 +103,8 @@ enum ConfigAction {
         #[arg(long)]
         zfs_pool: Option<String>,
     },
+    /// Display current configuration
+    Show,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -117,9 +119,18 @@ fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
+    // Most commands require root privileges (jail(2), mount, etc.)
+    if !matches!(cli.command, Commands::Completions { .. }) {
+        // SAFETY: getuid is always safe to call, no side effects
+        if unsafe { libc::getuid() } != 0 {
+            anyhow::bail!("dail requires root privileges. Run with doas or sudo.");
+        }
+    }
+
     match cli.command {
         Commands::Config { action } => match action {
             ConfigAction::Init { zfs_pool } => commands::config_init::run(zfs_pool)?,
+            ConfigAction::Show => commands::config_show::run()?,
         },
         Commands::Bootstrap(args) => commands::bootstrap::run(args)?,
         Commands::Create(args) => commands::create::run(args)?,
@@ -141,7 +152,7 @@ fn main() -> anyhow::Result<()> {
             CacheAction::Clean => commands::cache::clean()?,
         },
         Commands::Image { action } => commands::image::run(action)?,
-        Commands::Images => commands::image::run(commands::image::ImageAction::Ls)?,
+        Commands::Images => commands::image::run(commands::image::ImageAction::Ls { quiet: false })?,
         Commands::Completions { shell: Some(shell) } => {
             clap_complete::generate(shell, &mut Cli::command(), "dail", &mut std::io::stdout());
         }

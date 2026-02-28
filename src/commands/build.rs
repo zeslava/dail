@@ -75,18 +75,10 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
         std::fs::write(image_dir.join("manifest.json"), &manifest_json)?;
 
         // Create archive from jail root
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "tar -cf - --no-fflags -C {} . | zstd -f -o {}",
-                state.root_path.display(),
-                output_path.display(),
-            ))
-            .status()?;
-
-        if !status.success() {
-            anyhow::bail!("failed to create image archive");
-        }
+        crate::image::tar_create_zstd(
+            &[(state.root_path.as_path(), &["."])],
+            &output_path,
+        )?;
 
         lifecycle.remove(&name, true)?;
         println!("Image saved as {}:{}", img_name, img_tag);

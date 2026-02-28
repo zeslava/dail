@@ -80,7 +80,9 @@ dail run pg --image postgres:18 --ip 10.100.0.50 --persist  # with overrides
 ```bash
 dail start myjail
 dail stop myjail                    # if --rm was set, jail is auto-removed
+dail stop --all                     # stop all running jails
 dail restart myjail
+dail restart --all                  # restart all running jails
 ```
 
 **`dail rm`** — Remove a jail and its filesystem.
@@ -88,6 +90,7 @@ dail restart myjail
 ```bash
 dail rm myjail                      # must be stopped
 dail rm myjail --force              # stop + remove
+dail rm --all --force               # remove all jails
 ```
 
 ### Inspection
@@ -95,15 +98,23 @@ dail rm myjail --force              # stop + remove
 **`dail ls`** — List jails.
 
 ```bash
-dail ls                             # all jails
+dail ls                             # all jails (colored status)
 dail ls --running                   # only running
 dail ls --format json               # JSON output
+dail ls -q                          # names only (for scripting)
 ```
 
-**`dail inspect`** — Show full jail details as JSON.
+**`dail inspect`** — Show jail details.
 
 ```bash
-dail inspect myjail
+dail inspect myjail                 # human-readable
+dail inspect myjail --json          # raw JSON
+```
+
+**`dail config show`** — Display current configuration.
+
+```bash
+dail config show
 ```
 
 ### Execution
@@ -177,6 +188,7 @@ dail image load myjail-v1.0.tar.zst
 
 ```bash
 dail images
+dail images -q                      # name:tag only (for scripting)
 ```
 
 **`dail image inspect`** — Show image manifest details.

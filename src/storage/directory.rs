@@ -3,13 +3,13 @@ use std::path::PathBuf;
 use crate::error::DailError;
 use crate::jail::config::{GlobalConfig, JailConfig, JailType};
 use crate::jail::state::JailState;
-use crate::storage::StorageBackend;
+use crate::storage::{freebsd_arch, StorageBackend};
 
 pub struct DirectoryBackend;
 
 impl DirectoryBackend {
     fn base_dir(config: &GlobalConfig, release: &str) -> PathBuf {
-        let arch = "amd64";
+        let arch = freebsd_arch();
         config.bases_dir().join(format!("{release}-{arch}"))
     }
 }
@@ -24,19 +24,22 @@ impl StorageBackend for DirectoryBackend {
 
         std::fs::create_dir_all(&base_dir)?;
 
-        let arch = "amd64";
+        let arch = freebsd_arch();
         let url = format!("{}/{arch}/{release}/base.txz", config.mirror);
-        tracing::info!("Downloading base system from {url}");
+        eprintln!("Downloading {url}");
 
         let fetch = std::process::Command::new("fetch")
             .args(["-o", "-", &url])
             .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
             .spawn()
             .map_err(|e| DailError::Storage(format!("failed to start fetch: {e}")))?;
 
+        eprintln!("Extracting base system...");
         let tar_status = std::process::Command::new("tar")
             .args(["-xf", "-", "-C"])
             .arg(&base_dir)
+            // SAFETY: stdout is Some because we set .stdout(Stdio::piped())
             .stdin(fetch.stdout.unwrap())
             .status()
             .map_err(|e| DailError::Storage(format!("failed to extract base: {e}")))?;
@@ -97,9 +100,9 @@ impl StorageBackend for DirectoryBackend {
                     tracing::info!("Copying base to {}", root_path.display());
                     std::fs::remove_dir_all(&root_path)?;
                     let status = std::process::Command::new("cp")
-                        .args(["-a"])
-                        .arg(base_dir.to_str().unwrap())
-                        .arg(root_path.to_str().unwrap())
+                        .arg("-a")
+                        .arg(&base_dir)
+                        .arg(&root_path)
                         .status()
                         .map_err(|e| DailError::Storage(format!("cp failed: {e}")))?;
 

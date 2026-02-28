@@ -17,7 +17,7 @@ pub enum DailError {
     #[error("jail already exists: {0}")]
     JailAlreadyExists(String),
 
-    #[error("invalid state: jail '{name}' is {status}, expected {expected}")]
+    #[error("jail '{name}' is {status}. {expected}")]
     InvalidState {
         name: String,
         status: String,

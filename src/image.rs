@@ -2,10 +2,80 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use crate::error::DailError;
 use crate::jail::config::GlobalConfig;
 use crate::jail::state::JailState;
+
+/// Create a tar archive compressed with zstd.
+/// Uses a safe pipe (tar stdout → zstd stdin) without shell interpolation.
+pub fn tar_create_zstd(
+    sources: &[(&Path, &[&str])],
+    output: &Path,
+) -> Result<(), DailError> {
+    let mut tar_cmd = Command::new("tar");
+    tar_cmd.arg("-cf").arg("-").arg("--no-fflags");
+    for (dir, extra_args) in sources {
+        tar_cmd.arg("-C").arg(dir);
+        for a in *extra_args {
+            tar_cmd.arg(a);
+        }
+    }
+    tar_cmd.stdout(Stdio::piped());
+
+    let tar_child = tar_cmd
+        .spawn()
+        .map_err(|e| DailError::Image(format!("failed to spawn tar: {e}")))?;
+
+    let status = Command::new("zstd")
+        .arg("-f")
+        .arg("-o")
+        .arg(output)
+        .stdin(tar_child.stdout.expect("tar stdout is piped"))
+        .status()
+        .map_err(|e| DailError::Image(format!("failed to spawn zstd: {e}")))?;
+
+    if !status.success() {
+        return Err(DailError::Image("tar/zstd failed".to_string()));
+    }
+    Ok(())
+}
+
+/// Extract a zstd-compressed tar archive.
+/// Uses a safe pipe (zstd stdout → tar stdin) without shell interpolation.
+fn zstd_extract_tar(
+    archive: &Path,
+    dest: &Path,
+    extra_tar_args: &[&str],
+) -> Result<(), DailError> {
+    let mut zstd_cmd = Command::new("zstd");
+    zstd_cmd
+        .arg("-d")
+        .arg(archive)
+        .arg("--stdout")
+        .stdout(Stdio::piped());
+
+    let zstd_child = zstd_cmd
+        .spawn()
+        .map_err(|e| DailError::Image(format!("failed to spawn zstd: {e}")))?;
+
+    let mut tar_cmd = Command::new("tar");
+    tar_cmd.arg("-xf").arg("-").arg("-C").arg(dest);
+    for a in extra_tar_args {
+        tar_cmd.arg(a);
+    }
+    tar_cmd.stdin(zstd_child.stdout.expect("zstd stdout is piped"));
+
+    let status = tar_cmd
+        .status()
+        .map_err(|e| DailError::Image(format!("failed to spawn tar: {e}")))?;
+
+    if !status.success() {
+        return Err(DailError::Image("zstd/tar extraction failed".to_string()));
+    }
+    Ok(())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ImageManifest {
@@ -61,19 +131,19 @@ impl ImageStore {
             .map(PathBuf::from)
             .unwrap_or_else(|| PathBuf::from(&archive_name));
 
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "tar -cf - --no-fflags -C {} . -C {} manifest.json | zstd -f -o {}",
-                state.root_path.display(),
-                tmp_dir.path().display(),
-                output_path.display(),
-            ))
-            .status()?;
+        tar_create_zstd(
+            &[
+                (state.root_path.as_path(), &["."]),
+                (tmp_dir.path(), &["manifest.json"]),
+            ],
+            &output_path,
+        )?;
 
-        if !status.success() {
-            return Err(DailError::Image("tar/zstd failed".to_string()));
-        }
+        // Register image in images_dir so `image ls` and `image inspect` find it
+        let image_dir = self.images_dir.join(&manifest.name).join(tag);
+        std::fs::create_dir_all(&image_dir)?;
+        std::fs::write(image_dir.join("manifest.json"), &manifest_json)?;
+        std::fs::copy(&output_path, image_dir.join("image.tar.zst"))?;
 
         Ok(output_path)
     }
@@ -82,20 +152,7 @@ impl ImageStore {
         let tmp_dir = tempfile::tempdir()?;
 
         // Extract manifest first to get name/tag
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "zstd -d {} --stdout | tar -xf - -C {} manifest.json",
-                archive.display(),
-                tmp_dir.path().display(),
-            ))
-            .status()?;
-
-        if !status.success() {
-            return Err(DailError::Image(
-                "failed to extract manifest from archive".to_string(),
-            ));
-        }
+        zstd_extract_tar(archive, tmp_dir.path(), &["manifest.json"])?;
 
         let manifest_path = tmp_dir.path().join("manifest.json");
         let content = std::fs::read_to_string(&manifest_path)?;
@@ -166,18 +223,7 @@ impl ImageStore {
 
         std::fs::create_dir_all(dest)?;
 
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "zstd -d {} --stdout | tar -xf - -C {} --exclude manifest.json --no-fflags",
-                archive_path.display(),
-                dest.display(),
-            ))
-            .status()?;
-
-        if !status.success() {
-            return Err(DailError::Image("failed to extract image".to_string()));
-        }
+        zstd_extract_tar(&archive_path, dest, &["--exclude", "manifest.json", "--no-fflags"])?;
 
         Ok(manifest)
     }
@@ -198,19 +244,9 @@ impl ImageStore {
 
         std::fs::create_dir_all(&rootfs_dir)?;
 
-        let status = std::process::Command::new("sh")
-            .arg("-c")
-            .arg(format!(
-                "zstd -d {} --stdout | tar -xf - -C {} --exclude manifest.json --no-fflags",
-                archive_path.display(),
-                rootfs_dir.display(),
-            ))
-            .status()?;
-
-        if !status.success() {
-            // Clean up on failure
+        if let Err(e) = zstd_extract_tar(&archive_path, &rootfs_dir, &["--exclude", "manifest.json", "--no-fflags"]) {
             let _ = std::fs::remove_dir_all(&rootfs_dir);
-            return Err(DailError::Image("failed to extract image rootfs".to_string()));
+            return Err(e);
         }
 
         Ok(rootfs_dir)

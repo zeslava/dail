@@ -39,6 +39,18 @@ pub trait StorageBackend {
     ) -> Result<PathBuf, DailError>;
 }
 
+/// Detect FreeBSD machine architecture for base downloads.
+/// Maps `uname -m` output to FreeBSD release directory names.
+pub fn freebsd_arch() -> String {
+    std::process::Command::new("uname")
+        .arg("-m")
+        .output()
+        .ok()
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|s| s.trim().to_string())
+        .unwrap_or_else(|| "amd64".to_string())
+}
+
 pub fn get_backend(config: &GlobalConfig) -> Box<dyn StorageBackend> {
     match config.storage_backend.as_str() {
         "zfs" => Box::new(zfs_backend::ZfsBackend),

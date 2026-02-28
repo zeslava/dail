@@ -3,7 +3,9 @@ use clap_complete::engine::ArgValueCompleter;
 use crate::completions;
 use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
+use crate::network::{NetworkConfig, next_free_ip};
 use crate::storage;
+use crate::store::DailStore;
 
 #[derive(Args)]
 #[command(after_long_help = "\
@@ -36,6 +38,25 @@ pub fn run(args: CloneArgs) -> anyhow::Result<()> {
 
     let mut new_config = source.config.clone();
     new_config.name = args.new_name.clone();
+
+    // Allocate a new IP to avoid conflict with source jail
+    if let NetworkConfig::Alias { ref interface, .. } = new_config.network {
+        let store = DailStore::new(&global)?;
+        let used: Vec<String> = store.list().iter().filter_map(|s| {
+            if let NetworkConfig::Alias { ip, .. } = &s.config.network {
+                Some(ip.clone())
+            } else {
+                None
+            }
+        }).collect();
+        let new_ip = next_free_ip(&global.ip_pool, &used)
+            .ok_or_else(|| anyhow::anyhow!("no free IPs in pool {}", global.ip_pool))?;
+        new_config.network = NetworkConfig::Alias {
+            ip: new_ip,
+            interface: interface.clone(),
+        };
+    }
+
     lifecycle.create(new_config)?;
 
     println!("Jail '{}' cloned to '{}'", source_name, args.new_name);

@@ -4,6 +4,7 @@ pub mod build;
 pub mod image;
 pub mod clone;
 pub mod config_init;
+pub mod config_show;
 pub mod console;
 pub mod create;
 pub mod exec;

@@ -75,19 +75,22 @@ impl StorageBackend for ZfsBackend {
         Zfs::create_dataset(&dataset)?;
         let mountpoint = PathBuf::from(Zfs::get_mountpoint(&dataset)?);
 
-        let arch = "amd64";
+        let arch = crate::storage::freebsd_arch();
         let url = format!("{}/{arch}/{release}/base.txz", config.mirror);
-        tracing::info!("Downloading base system from {url}");
+        eprintln!("Downloading {url}");
 
         let fetch = std::process::Command::new("fetch")
             .args(["-o", "-", &url])
             .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::inherit())
             .spawn()
             .map_err(|e| DailError::Storage(format!("fetch failed: {e}")))?;
 
+        eprintln!("Extracting base system...");
         let tar_status = std::process::Command::new("tar")
             .args(["-xf", "-", "-C"])
             .arg(&mountpoint)
+            // SAFETY: stdout is Some because we set .stdout(Stdio::piped())
             .stdin(fetch.stdout.unwrap())
             .status()
             .map_err(|e| DailError::Storage(format!("tar failed: {e}")))?;

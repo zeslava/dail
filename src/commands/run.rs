@@ -1,6 +1,8 @@
 use clap::Args;
+use clap_complete::engine::ArgValueCompleter;
 
 use crate::build::executor::BuildExecutor;
+use crate::completions;
 use crate::build::dailfile::Dailfile;
 use crate::image::ImageStore;
 use crate::jail::config::{GlobalConfig, JailConfig, JailType, MountSpec};
@@ -24,11 +26,11 @@ pub struct RunArgs {
     pub name: String,
 
     /// FreeBSD base release (e.g. 14.0-RELEASE)
-    #[arg(long)]
+    #[arg(long, add = ArgValueCompleter::new(completions::complete_base_releases))]
     pub base: Option<String>,
 
     /// Jail type: thick or thin
-    #[arg(long, default_value = "thin")]
+    #[arg(long, default_value = "thin", add = ArgValueCompleter::new(completions::complete_jail_type))]
     pub r#type: String,
 
     /// IP alias (e.g. 10.0.0.5/24)
@@ -76,11 +78,11 @@ pub struct RunArgs {
     pub persist: bool,
 
     /// Apply a preset (e.g. postgres, nginx, dev)
-    #[arg(long)]
+    #[arg(long, add = ArgValueCompleter::new(completions::complete_preset_names))]
     pub preset: Option<String>,
 
     /// Network mode: inherit or none (default: auto alias from ip_pool)
-    #[arg(long = "network")]
+    #[arg(long = "network", add = ArgValueCompleter::new(completions::complete_network_mode))]
     pub network: Option<String>,
 
     /// Auto-remove jail when stopped
@@ -96,7 +98,7 @@ pub struct RunArgs {
     pub rebuild: bool,
 
     /// Run from a saved image (name:tag)
-    #[arg(long, conflicts_with_all = ["build", "base"])]
+    #[arg(long, conflicts_with_all = ["build", "base"], add = ArgValueCompleter::new(completions::complete_image_refs))]
     pub image: Option<String>,
 }
 
@@ -114,13 +116,16 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
 
     let jail_type = match args.r#type.as_str() {
         "thick" => JailType::Thick,
-        _ => JailType::Thin,
+        "thin" => JailType::Thin,
+        other => anyhow::bail!("invalid jail type '{other}'. Must be 'thick' or 'thin'"),
     };
 
     let network = if args.vnet {
+        let vnet_ip = args.vnet_ip
+            .ok_or_else(|| anyhow::anyhow!("--vnet requires --vnet-ip"))?;
         NetworkConfig::Vnet {
             bridge: args.vnet_bridge,
-            ip: args.vnet_ip.unwrap_or_default(),
+            ip: vnet_ip,
             gateway: args.vnet_gateway,
         }
     } else if let Some(ip) = args.ip {
@@ -303,7 +308,11 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         println!("Jail '{}' created (id: {})", state.name(), &state.id[..8]);
     }
 
-    lifecycle.start(&args.name)?;
+    if let Err(e) = lifecycle.start(&args.name) {
+        tracing::warn!("start failed, cleaning up jail '{}'", args.name);
+        let _ = lifecycle.remove(&args.name, false);
+        return Err(e.into());
+    }
     println!("Jail '{}' started.", args.name);
 
     if args.rm {

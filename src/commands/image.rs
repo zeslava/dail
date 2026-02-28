@@ -26,7 +26,11 @@ pub enum ImageAction {
         file: String,
     },
     /// List local images
-    Ls,
+    Ls {
+        /// Output names only (for scripting)
+        #[arg(short, long)]
+        quiet: bool,
+    },
     /// Remove a local image (name:tag)
     Rm {
         /// Image reference (name:tag)
@@ -61,22 +65,30 @@ pub fn run(action: ImageAction) -> anyhow::Result<()> {
             let manifest = image_store.load(std::path::Path::new(&file))?;
             println!("Loaded image: {}:{}", manifest.name, manifest.tag);
         }
-        ImageAction::Ls => {
+        ImageAction::Ls { quiet } => {
             let image_store = ImageStore::new(&config);
             let images = image_store.list()?;
             if images.is_empty() {
-                println!("No images found");
+                if !quiet {
+                    println!("No images found");
+                }
                 return Ok(());
             }
-            println!("{:<20} {:<10} {:<15} {}", "NAME", "TAG", "BASE", "CREATED");
-            for img in &images {
-                println!(
-                    "{:<20} {:<10} {:<15} {}",
-                    img.name,
-                    img.tag,
-                    img.base.as_deref().unwrap_or("-"),
-                    img.created_at.format("%Y-%m-%d %H:%M"),
-                );
+            if quiet {
+                for img in &images {
+                    println!("{}:{}", img.name, img.tag);
+                }
+            } else {
+                let mut table = crate::output::Table::new(vec!["NAME", "TAG", "BASE", "CREATED"]);
+                for img in &images {
+                    table.add_row(vec![
+                        img.name.clone(),
+                        img.tag.clone(),
+                        img.base.as_deref().unwrap_or("-").to_string(),
+                        img.created_at.format("%Y-%m-%d %H:%M").to_string(),
+                    ]);
+                }
+                table.print();
             }
         }
         ImageAction::Inspect { image } => {

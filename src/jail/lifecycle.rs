@@ -19,6 +19,7 @@ fn validate_jail_name(name: &str) -> Result<(), DailError> {
         return Err(DailError::Config("jail name cannot be empty".to_string()));
     }
     let mut chars = name.chars();
+    // SAFETY: checked name.is_empty() above
     let first = chars.next().unwrap();
     if !first.is_ascii_alphabetic() {
         return Err(DailError::Config(format!(
@@ -85,8 +86,8 @@ impl JailLifecycle {
         if state.status == JailStatus::Running {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
-                status: state.status.to_string(),
-                expected: "created or stopped".to_string(),
+                status: "already running".to_string(),
+                expected: format!("stop it first with `dail stop {name}`"),
             });
         }
 
@@ -116,6 +117,7 @@ impl JailLifecycle {
                     s.epair = epair;
                     s.started_at = Some(chrono::Utc::now());
                 })?;
+                // SAFETY: just updated via store.update() above
                 Ok(self.store.get(name).unwrap())
             }
             Err(e) => {
@@ -268,8 +270,8 @@ impl JailLifecycle {
         if state.status != JailStatus::Running {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
-                status: state.status.to_string(),
-                expected: "running".to_string(),
+                status: format!("{}, not running", state.status),
+                expected: format!("start it first with `dail start {name}`"),
             });
         }
 
@@ -338,12 +340,13 @@ impl JailLifecycle {
             } else {
                 return Err(DailError::InvalidState {
                     name: name.to_string(),
-                    status: state.status.to_string(),
-                    expected: "stopped or created".to_string(),
+                    status: "running".to_string(),
+                    expected: format!("stop it first or use `dail rm --force {name}`"),
                 });
             }
         }
 
+        // SAFETY: checked existence on line above; stop() doesn't remove from store
         let state = self.store.get(name).unwrap().clone();
 
         let backend = storage::get_backend(&self.config);
@@ -374,8 +377,8 @@ impl JailLifecycle {
         if state.status != JailStatus::Running {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
-                status: state.status.to_string(),
-                expected: "running".to_string(),
+                status: format!("{}, not running", state.status),
+                expected: format!("start it first with `dail start {name}`"),
             });
         }
 
@@ -391,8 +394,8 @@ impl JailLifecycle {
         if state.status != JailStatus::Running {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
-                status: state.status.to_string(),
-                expected: "running".to_string(),
+                status: format!("{}, not running", state.status),
+                expected: format!("start it first with `dail start {name}`"),
             });
         }
 

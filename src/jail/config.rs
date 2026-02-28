@@ -120,6 +120,15 @@ impl GlobalConfig {
         if toml_path.exists() {
             return Self::load_from(&toml_path);
         }
+
+        // No config file found — check if dail was ever initialized
+        let root = default_root_dir();
+        if !root.exists() {
+            return Err(DailError::Config(
+                "dail is not initialized. Run `dail config init` first.".to_string(),
+            ));
+        }
+
         Ok(Self::default())
     }
 

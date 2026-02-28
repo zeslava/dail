@@ -18,10 +18,11 @@ pub fn run(_args: PresetArgs) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    println!("{:<15} {:<10} {}", "NAME", "SOURCE", "DESCRIPTION");
+    let mut table = crate::output::Table::new(vec!["NAME", "SOURCE", "DESCRIPTION"]);
     for p in &presets {
-        println!("{:<15} {:<10} {}", p.name, p.source, p.description);
+        table.add_row(vec![p.name.clone(), p.source.clone(), p.description.clone()]);
     }
+    table.print();
 
     Ok(())
 }

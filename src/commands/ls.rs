@@ -18,6 +18,10 @@ pub struct LsArgs {
     /// Output format (table or json)
     #[arg(long, default_value = "table")]
     pub format: String,
+
+    /// Output names only (for scripting)
+    #[arg(short, long)]
+    pub quiet: bool,
 }
 
 pub fn run(args: LsArgs) -> anyhow::Result<()> {
@@ -30,9 +34,13 @@ pub fn run(args: LsArgs) -> anyhow::Result<()> {
         .filter(|j| !args.running || j.status == JailStatus::Running)
         .collect();
 
-    match args.format.as_str() {
-        "json" => output::print_json(&jails)?,
-        _ => output::print_table(&jails),
+    if args.quiet {
+        output::print_names(&jails);
+    } else {
+        match args.format.as_str() {
+            "json" => output::print_json(&jails)?,
+            _ => output::print_table(&jails),
+        }
     }
 
     Ok(())

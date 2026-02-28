@@ -43,7 +43,16 @@ pub fn run(args: LogsArgs) -> anyhow::Result<()> {
 
     let path = if let Some(ref file) = args.file {
         let rel = file.strip_prefix('/').unwrap_or(file);
-        state.root_path.join(rel)
+        let resolved = state.root_path.join(rel);
+        // Prevent path traversal outside jail root
+        let canonical = resolved.canonicalize()
+            .map_err(|_| anyhow::anyhow!("log file not found: {}", resolved.display()))?;
+        let root_canonical = state.root_path.canonicalize()
+            .map_err(|e| anyhow::anyhow!("cannot resolve jail root: {e}"))?;
+        if !canonical.starts_with(&root_canonical) {
+            anyhow::bail!("path escapes jail root: {}", file);
+        }
+        canonical
     } else if let Some(ref log_file) = state.config.log_file {
         let rel = log_file.strip_prefix('/').unwrap_or(log_file);
         state.root_path.join(rel)

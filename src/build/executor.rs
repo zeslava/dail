@@ -121,76 +121,87 @@ impl BuildExecutor {
             std::fs::create_dir_all(&pkg_repos_jail)?;
             NullfsMount::mount(&pkg_repos_host, &pkg_repos_jail, false)?;
 
-            for instruction in &dailfile.instructions {
-                match instruction {
-                    Instruction::Run { command } => {
-                        tracing::info!("RUN {command}");
-                        let status = lifecycle.exec(name, &["/bin/sh", "-c", command])?;
-                        if !status.success() {
-                            let _ = NullfsMount::unmount(&pkg_repos_jail);
-                            let _ = NullfsMount::unmount(&pkg_cache_jail);
-                            lifecycle.stop(name)?;
-                            return Err(DailError::Build(format!(
-                                "RUN command failed with exit code {:?}: {command}",
-                                status.code()
-                            )));
-                        }
-                    }
-                    Instruction::Copy { source, destination } => {
-                        tracing::info!("COPY {source} -> {destination}");
-                        let jail_state = lifecycle.get(name)
-                            .ok_or_else(|| DailError::Build("jail not found".into()))?;
-                        let dst = jail_state.root_path.join(
-                            destination.strip_prefix("/").unwrap_or(destination.as_str()),
-                        );
-                        if let Some(parent) = dst.parent() {
-                            std::fs::create_dir_all(parent)?;
-                        }
-                        let src_raw = std::path::Path::new(source.as_str());
-                        let src = if src_raw.is_relative() {
-                            context_dir.join(src_raw)
-                        } else {
-                            src_raw.to_path_buf()
-                        };
-                        let src = src.as_path();
-                        if src.is_dir() {
-                            let status = std::process::Command::new("cp")
-                                .arg("-a")
-                                .arg(src)
-                                .arg(&dst)
-                                .status()
-                                .map_err(|e| DailError::Build(format!("cp failed: {e}")))?;
+            let exec_result = (|| -> Result<(), DailError> {
+                for instruction in &dailfile.instructions {
+                    match instruction {
+                        Instruction::Run { command } => {
+                            tracing::info!("RUN {command}");
+                            let status = lifecycle.exec(name, &["/bin/sh", "-c", command])?;
                             if !status.success() {
-                                return Err(DailError::Build("COPY directory failed".into()));
+                                return Err(DailError::Build(format!(
+                                    "RUN command failed with exit code {:?}: {command}",
+                                    status.code()
+                                )));
                             }
-                        } else {
-                            std::fs::copy(src, &dst)?;
                         }
-                    }
-                    Instruction::Env { key, value } => {
-                        let cmd = format!("echo 'export {key}=\"{value}\"' >> /etc/profile");
-                        lifecycle.exec(name, &["/bin/sh", "-c", &cmd])?;
-                    }
-                    Instruction::Service { name: svc } => {
-                        tracing::info!("SERVICE {svc}");
-                        let cmd = format!("echo '{svc}_enable=\"YES\"' >> /etc/rc.conf");
-                        let status = lifecycle.exec(name, &["/bin/sh", "-c", &cmd])?;
-                        if !status.success() {
-                            let _ = NullfsMount::unmount(&pkg_repos_jail);
-                            let _ = NullfsMount::unmount(&pkg_cache_jail);
-                            lifecycle.stop(name)?;
-                            return Err(DailError::Build(format!(
-                                "SERVICE {svc}: failed to write rc.conf"
-                            )));
+                        Instruction::Copy { source, destination } => {
+                            tracing::info!("COPY {source} -> {destination}");
+                            let jail_state = lifecycle.get(name)
+                                .ok_or_else(|| DailError::Build("jail not found".into()))?;
+                            let dst = jail_state.root_path.join(
+                                destination.strip_prefix("/").unwrap_or(destination.as_str()),
+                            );
+                            if let Some(parent) = dst.parent() {
+                                std::fs::create_dir_all(parent)?;
+                            }
+                            let src_raw = std::path::Path::new(source.as_str());
+                            let src = if src_raw.is_relative() {
+                                context_dir.join(src_raw)
+                            } else {
+                                src_raw.to_path_buf()
+                            };
+                            let src = src.as_path();
+                            if src.is_dir() {
+                                let status = std::process::Command::new("cp")
+                                    .arg("-a")
+                                    .arg(src)
+                                    .arg(&dst)
+                                    .status()
+                                    .map_err(|e| DailError::Build(format!("cp failed: {e}")))?;
+                                if !status.success() {
+                                    return Err(DailError::Build("COPY directory failed".into()));
+                                }
+                            } else {
+                                std::fs::copy(src, &dst)?;
+                            }
                         }
+                        Instruction::Env { key, value } => {
+                            tracing::info!("ENV {key}={value}");
+                            let profile = root_path.join("etc/profile");
+                            use std::io::Write;
+                            let mut f = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(&profile)
+                                .map_err(|e| DailError::Build(format!("failed to write /etc/profile: {e}")))?;
+                            writeln!(f, "export {key}=\"{value}\"")
+                                .map_err(|e| DailError::Build(format!("failed to write /etc/profile: {e}")))?;
+                        }
+                        Instruction::Service { name: svc } => {
+                            tracing::info!("SERVICE {svc}");
+                            let rc_conf = root_path.join("etc/rc.conf");
+                            use std::io::Write;
+                            let mut f = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(&rc_conf)
+                                .map_err(|e| DailError::Build(format!("SERVICE {svc}: failed to write rc.conf: {e}")))?;
+                            writeln!(f, "{svc}_enable=\"YES\"")
+                                .map_err(|e| DailError::Build(format!("SERVICE {svc}: failed to write rc.conf: {e}")))?;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
-            }
+                Ok(())
+            })();
 
+            // Always clean up pkg mounts and stop jail, regardless of success/failure
             let _ = NullfsMount::unmount(&pkg_repos_jail);
             let _ = NullfsMount::unmount(&pkg_cache_jail);
             lifecycle.stop(name)?;
+
+            // Propagate any build error after cleanup
+            exec_result?;
 
             // Restore final config: original params, cmd, network
             lifecycle.store_update(name, |s| {

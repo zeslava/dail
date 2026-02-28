@@ -20,5 +20,7 @@ pub fn run(zfs_pool: Option<String>) -> anyhow::Result<()> {
         println!("Storage backend: directory");
     }
 
+    println!("\nNext step: dail bootstrap");
+
     Ok(())
 }
