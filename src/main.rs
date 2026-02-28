@@ -122,6 +122,7 @@ fn main() -> anyhow::Result<()> {
         .with_target(false)
         .with_level(true)
         .compact()
+        .with_ansi(true)
         .init();
 
     CompleteEnv::with_factory(Cli::command).complete();
