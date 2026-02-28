@@ -1,4 +1,4 @@
-use std::io::{Read, Seek, SeekFrom, BufRead, BufReader};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 
 use clap::Args;
@@ -17,19 +17,19 @@ Examples:
   dail logs myjail --file /var/log/messages")]
 pub struct LogsArgs {
     /// Jail name
-    #[arg(add = ArgValueCompleter::new(completions::complete_jail_names))]
+    #[arg(add = ArgValueCompleter::new(completions::complete_jail_names), display_order = 1)]
     pub name: String,
 
     /// Read a file from jail rootfs instead of cmd.log
-    #[arg(long)]
+    #[arg(long, display_order = 1000)]
     pub file: Option<String>,
 
     /// Follow log output (like tail -f)
-    #[arg(short, long)]
+    #[arg(short, long, display_order = 1000)]
     pub follow: bool,
 
     /// Number of lines to show from the end
-    #[arg(long)]
+    #[arg(long, display_order = 1000)]
     pub tail: Option<usize>,
 }
 
@@ -45,9 +45,12 @@ pub fn run(args: LogsArgs) -> anyhow::Result<()> {
         let rel = file.strip_prefix('/').unwrap_or(file);
         let resolved = state.root_path.join(rel);
         // Prevent path traversal outside jail root
-        let canonical = resolved.canonicalize()
+        let canonical = resolved
+            .canonicalize()
             .map_err(|_| anyhow::anyhow!("log file not found: {}", resolved.display()))?;
-        let root_canonical = state.root_path.canonicalize()
+        let root_canonical = state
+            .root_path
+            .canonicalize()
             .map_err(|e| anyhow::anyhow!("cannot resolve jail root: {e}"))?;
         if !canonical.starts_with(&root_canonical) {
             anyhow::bail!("path escapes jail root: {}", file);
