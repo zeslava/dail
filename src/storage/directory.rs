@@ -168,11 +168,45 @@ impl StorageBackend for DirectoryBackend {
     fn destroy(&self, config: &GlobalConfig, state: &JailState) -> Result<(), DailError> {
         let jail_dir = config.jails_dir().join(state.name());
         if jail_dir.exists() {
+            // Unmount any mounted filesystems inside jail_dir (pkg cache, devfs, etc.)
+            let output = std::process::Command::new("mount")
+                .output()
+                .map_err(|e| DailError::Storage(format!("failed to run mount: {e}")))?;
+
+            if output.status.success() {
+                let mount_list = String::from_utf8_lossy(&output.stdout);
+                let jail_path = jail_dir.to_string_lossy();
+
+                // Collect mount points under jail_dir, sort in reverse (unmount deepest first)
+                let mut mount_points: Vec<String> = mount_list
+                    .lines()
+                    .filter(|line| line.contains(&*jail_path))
+                    .filter_map(|line| {
+                        // Parse "source on /path/to/mount (flags)"
+                        line.split(" on ")
+                            .nth(1)?
+                            .split(" (")
+                            .next()
+                            .map(|s| s.to_string())
+                    })
+                    .collect();
+
+                mount_points.sort_by(|a, b| b.cmp(a)); // Reverse sort (deepest first)
+
+                for mount_point in mount_points {
+                    let _ = std::process::Command::new("umount")
+                        .arg("-f")
+                        .arg(&mount_point)
+                        .status();
+                }
+            }
+
             // Clear immutable/schg flags before removal (FreeBSD base sets them)
             let _ = std::process::Command::new("chflags")
                 .args(["-R", "noschg"])
                 .arg(&jail_dir)
                 .status();
+
             std::fs::remove_dir_all(&jail_dir)?;
         }
         Ok(())
