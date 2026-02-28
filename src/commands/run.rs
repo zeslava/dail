@@ -1,10 +1,10 @@
 use clap::Args;
 use clap_complete::engine::ArgValueCompleter;
 
-use crate::build::executor::BuildExecutor;
-use crate::completions;
 use crate::build::dailfile::Dailfile;
+use crate::build::executor::BuildExecutor;
 use crate::commands::shared::{self, CommonJailArgs, ConfigFlags};
+use crate::completions;
 use crate::image::{ImageRef, ImageStore};
 use crate::jail::config::{GlobalConfig, JailType};
 use crate::jail::lifecycle::JailLifecycle;
@@ -127,12 +127,7 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (config, info) = shared::build_jail_config(
-        args.name.clone(),
-        &common,
-        &global,
-        flags,
-    )?;
+    let (config, info) = shared::build_jail_config(args.name.clone(), &common, &global, flags)?;
 
     if let Some(ref image_ref_str) = args.image {
         // --image mode: extract image into jail root
@@ -194,16 +189,33 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         }
 
         let state = lifecycle.create_from_image(config, root_path)?;
-        println!("Jail '{}' created from image {}:{} (id: {})", state.name(), img_name, img_tag, &state.id[..8]);
-        
+        println!(
+            "Jail '{}' created from image {}:{} (id: {})",
+            state.name(),
+            img_name,
+            img_tag,
+            &state.id[..8]
+        );
+
         if let Some(ip) = info.allocated_ip {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
         }
     } else if let Some(ref dailfile_path) = args.build {
         // --build mode: ignore create args, use Dailfile
-        if args.rebuild && lifecycle.get(&args.name).is_some() {
-            lifecycle.remove(&args.name, true)?;
-            println!("Jail '{}' removed for rebuild.", args.name);
+        if let Some(existing) = lifecycle.get(&args.name) {
+            if args.rebuild {
+                lifecycle.remove(&args.name, true)?;
+                println!("Jail '{}' removed for rebuild.", args.name);
+            } else if existing.is_stopped() {
+                // Auto-remove stopped jail (e.g. after reconcile or previous build)
+                lifecycle.remove(&args.name, false)?;
+                println!("Jail '{}' (stopped) removed for rebuild.", args.name);
+            } else {
+                anyhow::bail!(
+                    "Jail '{}' already exists and is running. Use --rebuild to force rebuild.",
+                    args.name
+                );
+            }
         }
         let content = std::fs::read_to_string(dailfile_path)
             .map_err(|_| anyhow::anyhow!("Dailfile not found: {dailfile_path}"))?;
@@ -213,20 +225,26 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
             .unwrap_or(std::path::Path::new("."))
             .canonicalize()
             .unwrap_or_else(|_| std::path::PathBuf::from("."));
-        BuildExecutor::build(&mut lifecycle, &dailfile, &args.name, Some(&config), &context_dir)?;
+        BuildExecutor::build(
+            &mut lifecycle,
+            &dailfile,
+            &args.name,
+            Some(&config),
+            &context_dir,
+        )?;
         println!("Jail '{}' built.", args.name);
-        
+
         if let Some(ip) = info.allocated_ip {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
         }
     } else {
         let state = lifecycle.create(config)?;
         println!("Jail '{}' created (id: {})", state.name(), &state.id[..8]);
-        
+
         if let Some(ip) = info.allocated_ip {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
         }
-        
+
         println!("Base: {}", info.base_release);
     }
 

@@ -55,4 +55,8 @@ impl JailState {
     pub fn name(&self) -> &str {
         &self.config.name
     }
+
+    pub fn is_stopped(&self) -> bool {
+        self.status == JailStatus::Stopped
+    }
 }
