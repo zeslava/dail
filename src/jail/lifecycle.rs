@@ -61,7 +61,15 @@ impl JailLifecycle {
         }
 
         let backend = storage::get_backend(&self.config);
+
+        // Log base release if specified
+        if let Some(ref base) = jail_config.base {
+            tracing::info!("Preparing base system: {}", base);
+        }
+
+        tracing::info!("Creating jail root for '{}'", jail_config.name);
         let root_path = backend.create_jail_root(&self.config, &jail_config)?;
+        tracing::info!("Jail root created at {}", root_path.display());
 
         let state = JailState::new(jail_config, root_path);
         self.store.add(state.clone())?;

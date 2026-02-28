@@ -94,7 +94,9 @@ impl BuildExecutor {
                 s.config.network = crate::network::NetworkConfig::Inherit;
                 s.config.cmd = None;
             })?;
+            tracing::info!("Starting jail '{}' for build", name);
             lifecycle.start(name)?;
+            tracing::info!("Jail '{}' started", name);
 
             // Copy resolv.conf from host so pkg can resolve DNS
             let root_path = lifecycle
@@ -119,6 +121,7 @@ impl BuildExecutor {
             }
 
             // Mount shared pkg cache (downloaded packages + repo metadata)
+            tracing::info!("Mounting shared pkg cache");
             let pkg_cache_host = lifecycle.global_config().pkg_cache_dir();
             std::fs::create_dir_all(&pkg_cache_host)?;
             let pkg_cache_jail = root_path.join("var/cache/pkg");
@@ -131,6 +134,7 @@ impl BuildExecutor {
             std::fs::create_dir_all(&pkg_repos_jail)?;
             NullfsMount::mount(&pkg_repos_host, &pkg_repos_jail, false)?;
 
+            tracing::info!("Starting build instructions execution");
             let exec_result = (|| -> Result<(), DailError> {
                 for instruction in &dailfile.instructions {
                     match instruction {

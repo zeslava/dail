@@ -57,10 +57,12 @@ impl StorageBackend for DirectoryBackend {
     fn check_base(&self, config: &GlobalConfig, release: &str) -> Result<PathBuf, DailError> {
         let base_dir = Self::base_dir(config, release);
         if !base_dir.exists() {
+            tracing::error!("Base system '{}' not found at {}", release, base_dir.display());
             return Err(DailError::Storage(format!(
                 "base '{release}' not found. Run: dail bootstrap {release}"
             )));
         }
+        tracing::info!("Using base system '{}' from {}", release, base_dir.display());
         Ok(base_dir)
     }
 
@@ -97,8 +99,9 @@ impl StorageBackend for DirectoryBackend {
 
             match jail_config.jail_type {
                 JailType::Thick => {
-                    tracing::info!("Copying base to {}", root_path.display());
+                    tracing::info!("Copying base system to {}", root_path.display());
                     std::fs::remove_dir_all(&root_path)?;
+                    std::fs::create_dir(&root_path)?;
                     let status = std::process::Command::new("cp")
                         .arg("-a")
                         .arg(&base_dir)
@@ -109,8 +112,10 @@ impl StorageBackend for DirectoryBackend {
                     if !status.success() {
                         return Err(DailError::Storage("cp -a failed".to_string()));
                     }
+                    tracing::info!("Base system copied successfully");
                 }
                 JailType::Thin => {
+                    tracing::info!("Preparing thin jail with skeleton directories");
                     let skeleton_dir = jail_dir.join("skeleton");
                     std::fs::create_dir_all(&skeleton_dir)?;
 

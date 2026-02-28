@@ -45,7 +45,16 @@ impl StorageBackend for ZfsBackend {
         let parent = format!("{pool}/dail/bases");
 
         let output = std::process::Command::new("zfs")
-            .args(["list", "-H", "-o", "name,mountpoint", "-r", "-d", "1", &parent])
+            .args([
+                "list",
+                "-H",
+                "-o",
+                "name,mountpoint",
+                "-r",
+                "-d",
+                "1",
+                &parent,
+            ])
             .output()
             .map_err(|e| DailError::Storage(format!("zfs list failed: {e}")))?;
 
@@ -69,7 +78,9 @@ impl StorageBackend for ZfsBackend {
         let dataset = Self::base_dataset(config, release)?;
 
         if Zfs::dataset_exists(&dataset)? {
-            return Zfs::get_mountpoint(&dataset).map(PathBuf::from).map_err(Into::into);
+            return Zfs::get_mountpoint(&dataset)
+                .map(PathBuf::from)
+                .map_err(Into::into);
         }
 
         Zfs::create_dataset(&dataset)?;
@@ -77,7 +88,7 @@ impl StorageBackend for ZfsBackend {
 
         let arch = crate::storage::freebsd_arch();
         let url = format!("{}/{arch}/{release}/base.txz", config.mirror);
-        eprintln!("Downloading {url}");
+        tracing::info!("Downloading {}", url);
 
         let fetch = std::process::Command::new("fetch")
             .args(["-o", "-", &url])
@@ -86,7 +97,7 @@ impl StorageBackend for ZfsBackend {
             .spawn()
             .map_err(|e| DailError::Storage(format!("fetch failed: {e}")))?;
 
-        eprintln!("Extracting base system...");
+        tracing::info!("Extracting base system to {}", mountpoint.display());
         let tar_status = std::process::Command::new("tar")
             .args(["-xf", "-", "-C"])
             .arg(&mountpoint)
@@ -110,10 +121,9 @@ impl StorageBackend for ZfsBackend {
         config: &GlobalConfig,
         jail_config: &JailConfig,
     ) -> Result<PathBuf, DailError> {
-        let release = jail_config
-            .base
-            .as_deref()
-            .ok_or_else(|| DailError::Config("base release is required for ZFS backend".to_string()))?;
+        let release = jail_config.base.as_deref().ok_or_else(|| {
+            DailError::Config("base release is required for ZFS backend".to_string())
+        })?;
 
         let base_dataset = Self::base_dataset(config, release)?;
         self.check_base(config, release)?;
