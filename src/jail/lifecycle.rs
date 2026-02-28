@@ -136,6 +136,11 @@ impl JailLifecycle {
                 Ok(self.store.get(name).unwrap())
             }
             Err(e) => {
+                tracing::error!("Failed to start jail '{}': {}", state.name(), e);
+                tracing::debug!(
+                    "Attempting cleanup after failed start for jail '{}'",
+                    state.name()
+                );
                 self.cleanup_failed_start(&state);
                 Err(e)
             }
@@ -254,6 +259,8 @@ impl JailLifecycle {
 
     /// Best-effort cleanup after a failed start: unmount nullfs, devfs, thin jail mounts, remove jail.
     fn cleanup_failed_start(&self, state: &JailState) {
+        tracing::info!("Cleaning up failed start for jail '{}'", state.name());
+
         // Unmount nullfs in reverse order
         for mount in state.config.mounts.iter().rev() {
             let target = state.root_path.join(
@@ -262,26 +269,44 @@ impl JailLifecycle {
                     .strip_prefix("/")
                     .unwrap_or(&mount.destination),
             );
-            let _ = NullfsMount::force_unmount(&target);
+            if let Err(e) = NullfsMount::force_unmount(&target) {
+                tracing::debug!("Failed to unmount {}: {}", target.display(), e);
+            }
         }
 
         // Unmount devfs
         let devfs = state.root_path.join("dev");
         if devfs.exists() {
-            let _ = NullfsMount::force_unmount(&devfs);
+            if let Err(e) = NullfsMount::force_unmount(&devfs) {
+                tracing::debug!("Failed to unmount devfs: {}", e);
+            }
         }
 
         // Unmount thin jail skeleton + base
         if state.config.jail_type == JailType::Thin {
             for dir in &["root", "tmp", "var", "etc"] {
                 let dst = state.root_path.join(dir);
-                let _ = NullfsMount::force_unmount(&dst);
+                if let Err(e) = NullfsMount::force_unmount(&dst) {
+                    tracing::debug!("Failed to unmount {}: {}", dst.display(), e);
+                }
             }
-            let _ = NullfsMount::force_unmount(&state.root_path);
+            if let Err(e) = NullfsMount::force_unmount(&state.root_path) {
+                tracing::debug!("Failed to unmount jail root: {}", e);
+            }
         }
 
         // Try to remove jail (may not have been created yet)
-        let _ = JailSys::remove(&state.config.name);
+        match JailSys::remove(&state.config.name) {
+            Ok(()) => {
+                tracing::info!(
+                    "Successfully removed jail '{}' during cleanup",
+                    state.config.name
+                );
+            }
+            Err(e) => {
+                tracing::debug!("Failed to remove jail '{}': {}", state.config.name, e);
+            }
+        }
     }
 
     pub fn stop(&mut self, name: &str) -> Result<(), DailError> {

@@ -347,8 +347,23 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     }
 
     if let Err(e) = lifecycle.start(&jail_name) {
-        tracing::warn!("start failed, cleaning up jail '{}'", jail_name);
-        let _ = lifecycle.remove(&jail_name, false);
+        tracing::warn!("start failed, attempting to clean up jail '{}'", jail_name);
+        // Use force=true to ensure we stop and remove the jail regardless of state
+        match lifecycle.remove(&jail_name, true) {
+            Ok(()) => {
+                tracing::info!(
+                    "Successfully cleaned up jail '{}' after failed start",
+                    jail_name
+                );
+            }
+            Err(cleanup_err) => {
+                tracing::error!(
+                    "Failed to clean up jail '{}' after failed start (may need manual cleanup): {}",
+                    jail_name,
+                    cleanup_err
+                );
+            }
+        }
         return Err(e.into());
     }
     println!("Jail '{}' started.", jail_name);
