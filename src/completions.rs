@@ -18,7 +18,7 @@ fn load_jail_names(filter: Option<JailStatus>) -> Vec<CompletionCandidate> {
         .list()
         .into_iter()
         .filter(|j| filter.is_none_or(|s| j.status == s))
-        .map(|j| CompletionCandidate::new(j.config.name.as_str()))
+        .map(|j| CompletionCandidate::new(j.config.name.as_str()).display_order(Some(0)))
         .collect()
 }
 
