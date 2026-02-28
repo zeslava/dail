@@ -1,5 +1,6 @@
 use clap::Args;
 use clap_complete::engine::ArgValueCompleter;
+use uuid::Uuid;
 
 use crate::build::dailfile::Dailfile;
 use crate::build::executor::BuildExecutor;
@@ -12,16 +13,19 @@ use crate::jail::lifecycle::JailLifecycle;
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
+  dail run                                                  Auto-detect Dailfile in current dir
   dail run myjail                                           Create and start with defaults
   dail run postgres-jail --preset postgres                  Apply postgres preset
   dail run temp --rm                                        Auto-remove on stop
   dail run web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
   dail run app --mount /data:/app --preset dev --limit maxproc=512
+  dail run Dailfile                                         Build from ./Dailfile in current dir
+  dail run ./examples/postgres/Dailfile                     Build from specific Dailfile
   dail run postgres-jail --build ./examples/postgres/Dailfile
   dail run postgres-jail --build ./examples/postgres/Dailfile --rebuild")]
 pub struct RunArgs {
-    /// Jail name
-    pub name: String,
+    /// Jail name or Dailfile path (optional, auto-detects ./Dailfile if not provided)
+    pub name: Option<String>,
 
     /// FreeBSD base release (e.g. 14.0-RELEASE)
     #[arg(long, add = ArgValueCompleter::new(completions::complete_base_releases))]
@@ -100,9 +104,45 @@ pub struct RunArgs {
     pub image: Option<String>,
 }
 
-pub fn run(args: RunArgs) -> anyhow::Result<()> {
+pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global.clone())?;
+
+    // Auto-detect: if no name provided, look for Dailfile in current dir
+    let name_or_path = match args.name {
+        Some(n) => n,
+        None => {
+            if std::path::Path::new("Dailfile").exists() {
+                "Dailfile".to_string()
+            } else if std::path::Path::new("dailfile").exists() {
+                "dailfile".to_string()
+            } else {
+                anyhow::bail!(
+                    "No jail name provided and no Dailfile found in current directory.\nUsage: dail run <jail-name> [OPTIONS] or dail run [OPTIONS]"
+                );
+            }
+        }
+    };
+
+    // Auto-detect Dailfile mode: if name looks like a file path (contains / or is named Dailfile)
+    if args.build.is_none()
+        && (name_or_path.ends_with(".dailfile")
+            || name_or_path == "Dailfile"
+            || name_or_path == "dailfile"
+            || name_or_path.contains('/'))
+    {
+        // Treat as Dailfile path, use jail name as generated
+        args.build = Some(name_or_path);
+        args.name = Some(format!(
+            "dail-build-{}",
+            Uuid::new_v4().to_string()[..8].to_string()
+        ));
+    } else {
+        args.name = Some(name_or_path);
+    }
+
+    // Unwrap: name is guaranteed to be Some after above logic
+    let jail_name = args.name.unwrap();
 
     let common = CommonJailArgs {
         base: args.base.as_deref(),
@@ -127,7 +167,7 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         ..Default::default()
     };
 
-    let (config, info) = shared::build_jail_config(args.name.clone(), &common, &global, flags)?;
+    let (config, info) = shared::build_jail_config(jail_name.clone(), &common, &global, flags)?;
 
     if let Some(ref image_ref_str) = args.image {
         // --image mode: extract image into jail root
@@ -154,7 +194,7 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         }
         config.base = manifest.base.clone();
 
-        let jail_dir = global.jails_dir().join(&args.name);
+        let jail_dir = global.jails_dir().join(&jail_name);
         let root_path = jail_dir.join("root");
 
         if config.jail_type == JailType::Thin {
@@ -202,18 +242,18 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         }
     } else if let Some(ref dailfile_path) = args.build {
         // --build mode: ignore create args, use Dailfile
-        if let Some(existing) = lifecycle.get(&args.name) {
+        if let Some(existing) = lifecycle.get(&jail_name) {
             if args.rebuild {
-                lifecycle.remove(&args.name, true)?;
-                println!("Jail '{}' removed for rebuild.", args.name);
+                lifecycle.remove(&jail_name, true)?;
+                println!("Jail '{}' removed for rebuild.", jail_name);
             } else if existing.is_stopped() {
                 // Auto-remove stopped jail (e.g. after reconcile or previous build)
-                lifecycle.remove(&args.name, false)?;
-                println!("Jail '{}' (stopped) removed for rebuild.", args.name);
+                lifecycle.remove(&jail_name, false)?;
+                println!("Jail '{}' (stopped) removed for rebuild.", jail_name);
             } else {
                 anyhow::bail!(
                     "Jail '{}' already exists and is running. Use --rebuild to force rebuild.",
-                    args.name
+                    jail_name
                 );
             }
         }
@@ -228,11 +268,11 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         BuildExecutor::build(
             &mut lifecycle,
             &dailfile,
-            &args.name,
+            &jail_name,
             Some(&config),
             &context_dir,
         )?;
-        println!("Jail '{}' built.", args.name);
+        println!("Jail '{}' built.", jail_name);
 
         if let Some(ip) = info.allocated_ip {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
@@ -248,12 +288,12 @@ pub fn run(args: RunArgs) -> anyhow::Result<()> {
         println!("Base: {}", info.base_release);
     }
 
-    if let Err(e) = lifecycle.start(&args.name) {
-        tracing::warn!("start failed, cleaning up jail '{}'", args.name);
-        let _ = lifecycle.remove(&args.name, false);
+    if let Err(e) = lifecycle.start(&jail_name) {
+        tracing::warn!("start failed, cleaning up jail '{}'", jail_name);
+        let _ = lifecycle.remove(&jail_name, false);
         return Err(e.into());
     }
-    println!("Jail '{}' started.", args.name);
+    println!("Jail '{}' started.", jail_name);
 
     if args.rm {
         println!("(will be auto-removed on stop)");

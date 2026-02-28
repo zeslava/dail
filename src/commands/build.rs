@@ -1,19 +1,19 @@
-use clap::Args;
-use crate::build::executor::BuildExecutor;
 use crate::build::dailfile::Dailfile;
+use crate::build::executor::BuildExecutor;
 use crate::image::ImageRef;
 use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
+use clap::Args;
 
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
-  dail build --name myapp                     Use ./Dailfile in current dir
-  dail build Dailfile --name myapp
-  dail build ./jails/web.dailfile --name web
-  dail build Dailfile --tag postgres:18")]
+  dail build                                  Use ./Dailfile in current dir
+  dail build Dailfile --name myapp            Same as above, explicit path
+  dail build ./jails/web.dailfile --name web  Build from custom path
+  dail build Dailfile --tag postgres:18       Save as image instead of jail")]
 pub struct BuildArgs {
-    /// Path to Dailfile (default: ./Dailfile)
+    /// Path to Dailfile (default: ./Dailfile in current dir)
     pub dailfile: Option<String>,
     /// Jail name (required without --tag, auto-generated with --tag)
     #[arg(long)]
@@ -50,7 +50,8 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
         let img_name = &image_ref.name;
         let img_tag = &image_ref.tag;
 
-        let state = lifecycle.get(&name)
+        let state = lifecycle
+            .get(&name)
             .ok_or_else(|| anyhow::anyhow!("built jail '{}' not found in store", name))?
             .clone();
 
@@ -74,10 +75,7 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
         std::fs::write(image_dir.join("manifest.json"), &manifest_json)?;
 
         // Create archive from jail root
-        crate::image::tar_create_zstd(
-            &[(state.root_path.as_path(), &["."])],
-            &output_path,
-        )?;
+        crate::image::tar_create_zstd(&[(state.root_path.as_path(), &["."])], &output_path)?;
 
         lifecycle.remove(&name, true)?;
         println!("Image saved as {}:{}", img_name, img_tag);
