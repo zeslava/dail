@@ -93,7 +93,6 @@ impl BuildExecutor {
             .iter()
             .any(|i| matches!(i, Instruction::Run { .. } | Instruction::Copy { .. }));
         if has_run_or_copy {
-            tracing::info!("Starting jail '{}' for build", name);
             // During build: persist=true to stay alive between RUN steps,
             // inherit network for pkg access, no CMD yet
             lifecycle.store_update(name, |s| {
@@ -102,8 +101,15 @@ impl BuildExecutor {
                 s.config.cmd = None;
             })?;
             tracing::info!("Starting jail '{}' for build", name);
-            lifecycle.start(name)?;
-            tracing::info!("Jail '{}' started", name);
+            match lifecycle.start(name) {
+                Ok(_) => {
+                    tracing::info!("Jail '{}' started", name);
+                }
+                Err(e) => {
+                    tracing::error!("Failed to start jail '{}' for build: {}", name, e);
+                    return Err(e);
+                }
+            }
 
             // Copy resolv.conf from host so pkg can resolve DNS
             let root_path = lifecycle
