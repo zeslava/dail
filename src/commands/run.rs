@@ -309,14 +309,18 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
+        tracing::info!("Reading Dailfile from {}", dailfile_path);
         let content = std::fs::read_to_string(dailfile_path)
             .map_err(|_| anyhow::anyhow!("Dailfile not found: {dailfile_path}"))?;
+        tracing::info!("Parsing Dailfile...");
         let dailfile = Dailfile::parse(&content)?;
+        tracing::info!("Dailfile parsed successfully");
         let context_dir = std::path::Path::new(dailfile_path.as_str())
             .parent()
             .unwrap_or(std::path::Path::new("."))
             .canonicalize()
             .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        tracing::info!("Starting build from {}", dailfile_path);
         BuildExecutor::build(
             &mut lifecycle,
             &dailfile,

@@ -14,10 +14,12 @@ impl BuildExecutor {
         cli_config: Option<&JailConfig>,
         context_dir: &std::path::Path,
     ) -> Result<(), DailError> {
+        tracing::info!("Building jail '{}' from Dailfile", name);
         let mut jail_config = JailConfig::new(name.to_string());
         // Build always uses thick jail — we need a writable rootfs
         jail_config.jail_type = crate::jail::config::JailType::Thick;
 
+        tracing::debug!("Parsing Dailfile instructions...");
         for instruction in &dailfile.instructions {
             match instruction {
                 Instruction::From { release } => {
@@ -77,6 +79,11 @@ impl BuildExecutor {
         }
 
         let jail_config_final = jail_config.clone();
+        tracing::info!(
+            "Jail config prepared: base={:?}, type=thick, persist={}",
+            jail_config.base,
+            jail_config.persist
+        );
         tracing::info!("Creating jail '{}'", name);
         lifecycle.create(jail_config)?;
         tracing::info!("Jail '{}' created", name);
