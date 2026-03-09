@@ -336,6 +336,17 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
         }
     } else {
+        if let Some(existing) = lifecycle.get(&jail_name) {
+            if existing.is_stopped() {
+                lifecycle.remove(&jail_name, false)?;
+            } else {
+                anyhow::bail!(
+                    "jail '{}' already exists and is {}. Use `dail rm {}` first or `dail start {}`.",
+                    jail_name, existing.status, jail_name, jail_name
+                );
+            }
+        }
+
         let state = lifecycle.create(config)?;
         println!("Jail '{}' created (id: {})", state.name(), &state.id[..8]);
 
