@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Args;
 use clap_complete::engine::ArgValueCompleter;
@@ -10,45 +11,59 @@ use crate::jail::lifecycle::JailLifecycle;
 use crate::jail::state::JailStatus;
 use crate::output::Table;
 
+static RUNNING: AtomicBool = AtomicBool::new(true);
+
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
-  dail top                     Show all running jails
-  dail top postgres            Show a single jail
-  dail top --watch             Refresh every 2 seconds
-  dail top --watch 5           Refresh every 5 seconds")]
+  dail top                     Watch all running jails (refresh every 2s)
+  dail top postgres            Watch a single jail
+  dail top --interval 5        Refresh every 5 seconds
+  dail top --once              Print once and exit")]
 pub struct TopArgs {
     /// Filter by jail name
     #[arg(add = ArgValueCompleter::new(completions::complete_running_jail_names))]
     pub name: Option<String>,
 
-    /// Refresh interval in seconds (default: 2)
-    #[arg(long, num_args = 0..=1, default_missing_value = "2")]
-    pub watch: Option<u64>,
+    /// Refresh interval in seconds
+    #[arg(short, long, default_value = "2")]
+    pub interval: u64,
+
+    /// Print once and exit (no watch loop)
+    #[arg(long)]
+    pub once: bool,
 }
 
 pub fn run(args: TopArgs) -> anyhow::Result<()> {
-    if args.watch.is_some() && !std::io::stdout().is_terminal() {
-        anyhow::bail!("--watch requires an interactive terminal");
+    let watch = !args.once && std::io::stdout().is_terminal();
+
+    if watch {
+        // SAFETY: handler only sets an atomic bool, async-signal-safe
+        unsafe {
+            libc::signal(libc::SIGINT, signal_handler as *const () as libc::sighandler_t);
+            libc::signal(libc::SIGTERM, signal_handler as *const () as libc::sighandler_t);
+        }
     }
 
     loop {
-        if args.watch.is_some() {
-            // ANSI: clear screen + move cursor home
+        if watch {
             print!("\x1b[2J\x1b[H");
         }
 
         print_top(&args)?;
 
-        match args.watch {
-            Some(interval) => {
-                std::thread::sleep(std::time::Duration::from_secs(interval));
-            }
-            None => break,
+        if !watch || !RUNNING.load(Ordering::Relaxed) {
+            break;
         }
+
+        std::thread::sleep(std::time::Duration::from_secs(args.interval));
     }
 
     Ok(())
+}
+
+extern "C" fn signal_handler(_sig: libc::c_int) {
+    RUNNING.store(false, Ordering::Relaxed);
 }
 
 fn print_top(args: &TopArgs) -> anyhow::Result<()> {
