@@ -212,13 +212,16 @@ impl JailLifecycle {
 
         let vnet = matches!(&state.config.network, NetworkConfig::Vnet { .. });
 
+        // FreeBSD requires persist or a running process; auto-enable if no CMD
+        let persist = state.config.persist || state.config.cmd.is_none();
+
         let params = JailParams {
             name: state.config.name.clone(),
             path: state.root_path.clone(),
             hostname: state.config.hostname.clone(),
             ip4_addr,
             vnet,
-            persist: state.config.persist,
+            persist,
             extra,
         };
 
