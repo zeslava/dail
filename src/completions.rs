@@ -72,6 +72,30 @@ pub fn complete_network_mode(_current: &std::ffi::OsStr) -> Vec<CompletionCandid
     ]
 }
 
+/// Complete first positional arg of `dail run`: jail names + Dailfile paths
+pub fn complete_run_first(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
+    let mut candidates = load_jail_names(None);
+
+    // Add Dailfile paths from current directory
+    if let Ok(entries) = std::fs::read_dir(".") {
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let Some(name_str) = name.to_str() else {
+                continue;
+            };
+            if name_str == "Dailfile"
+                || name_str == "dailfile"
+                || name_str.ends_with(".Dailfile")
+                || name_str.ends_with(".dailfile")
+            {
+                candidates.push(CompletionCandidate::new(name_str));
+            }
+        }
+    }
+
+    candidates
+}
+
 pub fn complete_base_releases(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
     let Ok(config) = GlobalConfig::load() else {
         return Vec::new();

@@ -22,6 +22,7 @@ Examples:
   dail run ./examples/postgres/Dailfile pg --rebuild        Rebuild from scratch")]
 pub struct RunArgs {
     /// Jail name or Dailfile path
+    #[arg(add = ArgValueCompleter::new(completions::complete_run_first))]
     pub first: Option<String>,
 
     /// Jail name (when first argument is a Dailfile path)
