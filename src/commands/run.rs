@@ -337,14 +337,13 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         }
     } else {
         if let Some(existing) = lifecycle.get(&jail_name) {
-            if existing.is_stopped() {
-                lifecycle.remove(&jail_name, false)?;
-            } else {
+            if existing.status == crate::jail::state::JailStatus::Running {
                 anyhow::bail!(
-                    "jail '{}' already exists and is {}. Use `dail rm {}` first or `dail start {}`.",
-                    jail_name, existing.status, jail_name, jail_name
+                    "jail '{}' is already running. Use `dail rm --force {}` or `dail stop {}`.",
+                    jail_name, jail_name, jail_name
                 );
             }
+            lifecycle.remove(&jail_name, false)?;
         }
 
         let state = lifecycle.create(config)?;
