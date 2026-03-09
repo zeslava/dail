@@ -403,6 +403,9 @@ impl JailLifecycle {
         // SAFETY: checked existence on line above; stop() doesn't remove from store
         let state = self.store.get(name).unwrap().clone();
 
+        // Best-effort: remove jail from kernel if it lingers (e.g. persist without processes)
+        let _ = JailSys::remove(name);
+
         let backend = storage::get_backend(&self.config);
         backend.destroy(&self.config, &state)?;
 
