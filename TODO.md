@@ -3,6 +3,7 @@
 ## Done
 
 - [x] **Security:** command injection, shell injection, path traversal, root check
+- [x] **Fix shell injection in `directory.rs`** — replaced `sh -c "cp -a base/* root/"` with direct `cp -a base/. root/`
 - [x] **Data integrity:** flock, corrupt state backup, atomic writes, image save registration
 - [x] **Validation:** `--type`, `--vnet`/`--vnet-ip`, arch detection, build/run cleanup, unwrap audit
 
@@ -29,6 +30,12 @@
 
 - [x] **Extract shared builder** — deduplicate ~100 lines between `create.rs` and `run.rs`
 - [ ] **Remove dead code** — audit `#[allow(dead_code)]` in `src/freebsd/mod.rs`
+- [ ] **Add unit tests** — Dailfile parser, `next_free_ip()`, `validate_jail_name()`, `ImageRef::parse()`, store serde round-trip
+- [ ] **Extract IP allocation** — deduplicate between `shared.rs` and `clone.rs` into a reusable helper
+- [ ] **Protect build against crash-state** — build executor mutates persisted state for temporary needs; use separate build config or `building` flag
+- [ ] **Split `run.rs`** — extract image-mode and build-mode into separate functions/modules
+- [ ] **`dail apply <path-or-url>`** — clone/pull git repo, find Dailfile, build+run; key workflow for git-native distribution
+- [ ] **`dail top`** — show running processes inside a jail (jexec ps wrapper)
 - [x] **Image ref parsing** — extract helper, used in 4+ places
 - [ ] **Deprecation** — migrate `serde_yaml` → `serde_yml` or drop YAML support (TOML only)
 
@@ -56,21 +63,6 @@
 ### Image management
 
 - [ ] Image deduplication — shared base layers via ZFS clones
-
-### Remote registry
-
-- [ ] `dail push <image>:<tag> <registry-url>`
-- [ ] `dail pull <registry-url>/<image>:<tag>`
-- [ ] Simple registry protocol: PUT/GET tar.zst + manifest over HTTPS
-- [ ] `Dailfile` FROM support: `FROM postgres:18` (local image) vs `FROM 15.0-RELEASE` (base)
-
-### Daemon mode
-
-- [ ] `daild` — root daemon on `/var/run/dail.sock`
-- [ ] `dail` CLI becomes socket client
-- [ ] Socket permissions via `dail` group
-- [ ] `rc.d/daild` service script
-- [ ] Streaming for `exec`, `console`, `build`
 
 ### Other ideas
 

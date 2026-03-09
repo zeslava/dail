@@ -14,11 +14,15 @@ fn load_jail_names(filter: Option<JailStatus>) -> Vec<CompletionCandidate> {
     let Ok(store) = DailStore::new(&config) else {
         return Vec::new();
     };
-    store
-        .list()
+    let mut jails = store.list();
+    if let Some(status) = filter {
+        jails.retain(|j| j.status == status);
+    }
+    jails.sort_by(|a, b| a.config.name.cmp(&b.config.name));
+    jails
         .into_iter()
-        .filter(|j| filter.is_none_or(|s| j.status == s))
-        .map(|j| CompletionCandidate::new(j.config.name.as_str()).display_order(Some(0)))
+        .enumerate()
+        .map(|(i, j)| CompletionCandidate::new(j.config.name.clone()).display_order(Some(i)))
         .collect()
 }
 

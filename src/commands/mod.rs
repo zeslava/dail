@@ -19,3 +19,4 @@ pub mod shared;
 pub mod snapshot;
 pub mod start;
 pub mod stop;
+pub mod top;

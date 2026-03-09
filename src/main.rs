@@ -58,6 +58,8 @@ enum Commands {
     Clone(commands::clone::CloneArgs),
     /// Create and start a jail in one step
     Run(commands::run::RunArgs),
+    /// Show resource usage of running jails
+    Top(commands::top::TopArgs),
     /// List available presets
     Preset(commands::preset::PresetArgs),
     /// Manage build cache
@@ -144,6 +146,7 @@ fn main() -> anyhow::Result<()> {
             | Commands::Config {
                 action: ConfigAction::Show
             }
+            | Commands::Top(..)
             | Commands::Preset(..)
     );
 
@@ -174,6 +177,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Snapshot(args) => commands::snapshot::run(args)?,
         Commands::Clone(args) => commands::clone::run(args)?,
         Commands::Run(args) => commands::run::run(args)?,
+        Commands::Top(args) => commands::top::run(args)?,
         Commands::Preset(args) => commands::preset::run(args)?,
         Commands::Cache { action } => match action {
             CacheAction::Clean => commands::cache::clean()?,

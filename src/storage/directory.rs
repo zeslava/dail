@@ -110,13 +110,10 @@ impl StorageBackend for DirectoryBackend {
                     tracing::info!("Copying base system to {}", root_path.display());
                     std::fs::remove_dir_all(&root_path)?;
                     std::fs::create_dir(&root_path)?;
-                    let status = std::process::Command::new("sh")
-                        .arg("-c")
-                        .arg(format!(
-                            "cp -a {}/* {}/",
-                            base_dir.display(),
-                            root_path.display()
-                        ))
+                    let status = std::process::Command::new("cp")
+                        .arg("-a")
+                        .arg(base_dir.join("."))
+                        .arg(&root_path)
                         .status()
                         .map_err(|e| DailError::Storage(format!("cp failed: {e}")))?;
 
