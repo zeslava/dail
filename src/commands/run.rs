@@ -13,20 +13,19 @@ use crate::jail::lifecycle::JailLifecycle;
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
-  dail run myjail                                           Create and start with defaults
-  dail run postgres-jail --preset postgres                  Apply postgres preset
-  dail run temp --rm                                        Auto-remove on stop
-  dail run Dailfile                                         Build from ./Dailfile in current dir
-  dail run ./examples/postgres/Dailfile --name pg           Build with explicit name
-  dail run pg --build ./examples/postgres/Dailfile          Same, alternative syntax
-  dail run pg --build ./examples/postgres/Dailfile --rebuild")]
+  dail run pg                                               Create and start with defaults
+  dail run pg --preset postgres                             Apply postgres preset
+  dail run pg --rm                                          Auto-remove on stop
+  dail run ./examples/postgres/Dailfile pg                  Build Dailfile, name jail 'pg'
+  dail run ./examples/postgres/Dailfile                     Build with auto-generated name
+  dail run                                                  Auto-detect ./Dailfile
+  dail run ./examples/postgres/Dailfile pg --rebuild        Rebuild from scratch")]
 pub struct RunArgs {
-    /// Jail name or Dailfile path (optional, auto-detects ./Dailfile if not provided)
-    pub target: Option<String>,
+    /// Jail name or Dailfile path
+    pub first: Option<String>,
 
-    /// Explicit jail name (when target is a Dailfile path)
-    #[arg(long)]
-    pub name: Option<String>,
+    /// Jail name (when first argument is a Dailfile path)
+    pub second: Option<String>,
 
     /// FreeBSD base release (e.g. 14.0-RELEASE)
     #[arg(long, add = ArgValueCompleter::new(completions::complete_base_releases))]
@@ -143,46 +142,46 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global.clone())?;
 
-    // Auto-detect: if no target provided, look for Dailfile in current dir
-    let target = match args.target {
-        Some(n) => n,
+    // Resolve first/second positional args into (jail_name, optional dailfile_path)
+    let first = match args.first {
+        Some(f) => f,
         None => {
-            tracing::info!("No target provided, looking for Dailfile...");
-
+            // No args: auto-detect Dailfile in current dir
             if std::path::Path::new("Dailfile").exists() {
                 "Dailfile".to_string()
             } else if std::path::Path::new("dailfile").exists() {
                 "dailfile".to_string()
+            } else if let Some(path) = find_dailfile_pattern() {
+                path
             } else {
-                match find_dailfile_pattern() {
-                    Some(path) => path,
-                    None => {
-                        anyhow::bail!(
-                            "No jail name provided and no Dailfile found in current directory.\nUsage: dail run <name> or dail run <Dailfile> --name <name>"
-                        );
-                    }
-                }
+                anyhow::bail!(
+                    "No arguments and no Dailfile found.\nUsage: dail run <name> or dail run <Dailfile> [name]"
+                );
             }
         }
     };
 
-    // Auto-detect Dailfile mode: if target looks like a file path
-    let is_dailfile = args.build.is_none()
-        && (target.ends_with(".Dailfile")
-            || target.ends_with(".dailfile")
-            || target == "Dailfile"
-            || target == "dailfile"
-            || target.contains('/'));
+    fn looks_like_dailfile(s: &str) -> bool {
+        s.ends_with(".Dailfile")
+            || s.ends_with(".dailfile")
+            || s == "Dailfile"
+            || s == "dailfile"
+            || s.contains('/')
+    }
 
     let jail_name;
-    if is_dailfile {
-        jail_name = args.name.take().unwrap_or_else(|| {
+    if args.build.is_none() && looks_like_dailfile(&first) {
+        // first arg is a Dailfile path, second (if any) is the jail name
+        jail_name = args.second.unwrap_or_else(|| {
             format!("dail-build-{}", &Uuid::new_v4().to_string()[..8])
         });
-        tracing::info!("Building from {} (jail name: {})", target, jail_name);
-        args.build = Some(target);
+        args.build = Some(first);
     } else {
-        jail_name = args.name.take().unwrap_or(target);
+        // first arg is the jail name
+        if args.second.is_some() {
+            anyhow::bail!("unexpected second argument. Did you mean: dail run <Dailfile> <name>?");
+        }
+        jail_name = first;
     }
 
     let common = CommonJailArgs {
