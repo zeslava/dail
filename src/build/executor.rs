@@ -1,7 +1,7 @@
 use crate::build::dailfile::{Dailfile, Instruction};
 use crate::error::DailError;
 use crate::freebsd::mount::NullfsMount;
-use crate::jail::config::{JailConfig, MountSpec};
+use crate::jail::config::{JailConfig, MountSpec, PortMapping};
 use crate::jail::lifecycle::JailLifecycle;
 
 pub struct BuildExecutor;
@@ -50,6 +50,14 @@ impl BuildExecutor {
                 Instruction::Log { path } => {
                     jail_config.log_file = Some(path.clone());
                 }
+                Instruction::Expose { host_port, jail_port } => {
+                    jail_config.ports.push(PortMapping {
+                        host_ip: None,
+                        host_port: *host_port,
+                        jail_port: *jail_port,
+                        proto: "tcp".to_string(),
+                    });
+                }
                 _ => {}
             }
         }
@@ -76,6 +84,7 @@ impl BuildExecutor {
             }
             jail_config.mounts.extend(cli.mounts.iter().cloned());
             jail_config.auto_remove = cli.auto_remove;
+            jail_config.ports.extend(cli.ports.iter().cloned());
         }
 
         let jail_config_final = jail_config.clone();
@@ -277,6 +286,7 @@ impl BuildExecutor {
                 s.config.network = jail_config_final.network.clone();
                 s.config.cmd = jail_config_final.cmd.clone();
                 s.config.log_file = jail_config_final.log_file.clone();
+                s.config.ports = jail_config_final.ports.clone();
             })?;
         }
 

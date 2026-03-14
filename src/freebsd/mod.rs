@@ -9,3 +9,4 @@ pub mod zfs;
 #[allow(dead_code)]
 pub mod rctl;
 pub mod ps;
+pub mod pf;

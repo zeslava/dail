@@ -76,6 +76,10 @@ pub struct CreateArgs {
     /// Network mode: 'inherit' (host network), 'none' (isolated), or omit for auto IP from pool
     #[arg(long = "network", add = ArgValueCompleter::new(completions::complete_network_mode))]
     pub network: Option<String>,
+
+    /// Publish port: [host_ip:]host_port:jail_port[/proto]
+    #[arg(short = 'p', long = "publish")]
+    pub publish: Vec<String>,
 }
 
 pub fn run(args: CreateArgs) -> anyhow::Result<()> {
@@ -98,6 +102,7 @@ pub fn run(args: CreateArgs) -> anyhow::Result<()> {
         persist: args.persist,
         preset: args.preset.as_deref(),
         network: args.network.as_deref(),
+        publish: &args.publish,
     };
 
     let (config, info) =

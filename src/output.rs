@@ -94,7 +94,7 @@ pub fn print_table(jails: &[&JailState]) {
         return;
     }
 
-    let mut table = Table::new(vec!["NAME", "STATUS", "JID", "IP", "BASE", "TYPE", "CREATED"]);
+    let mut table = Table::new(vec!["NAME", "STATUS", "JID", "IP", "PORTS", "BASE", "TYPE", "CREATED"]);
 
     for jail in jails {
         let jid = jail.jid.map(|j| j.to_string()).unwrap_or_else(|| "-".to_string());
@@ -108,11 +108,21 @@ pub fn print_table(jails: &[&JailState]) {
             NetworkConfig::None => "none".to_string(),
         };
 
+        let ports = if jail.config.ports.is_empty() {
+            String::new()
+        } else {
+            jail.config.ports.iter()
+                .map(|p| format!("{}->{}:{}/{}", p.host_port, jail.name(), p.jail_port, p.proto))
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+
         table.add_row(vec![
             jail.name().to_string(),
             colored_status(&jail.status),
             jid,
             ip,
+            ports,
             base,
             jail_type,
             created,

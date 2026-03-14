@@ -186,6 +186,66 @@ fn default_mount_type() -> String {
     "nullfs".to_string()
 }
 
+fn default_proto() -> String {
+    "tcp".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct PortMapping {
+    pub host_ip: Option<String>,
+    pub host_port: u16,
+    pub jail_port: u16,
+    #[serde(default = "default_proto")]
+    pub proto: String,
+}
+
+impl PortMapping {
+    /// Parse `[host_ip:]host_port:jail_port[/proto]`
+    pub fn parse(s: &str) -> Result<Self, DailError> {
+        let (main, proto) = if let Some((m, p)) = s.rsplit_once('/') {
+            (m, p.to_string())
+        } else {
+            (s, "tcp".to_string())
+        };
+
+        let parts: Vec<&str> = main.split(':').collect();
+        match parts.len() {
+            2 => {
+                let host_port: u16 = parts[0]
+                    .parse()
+                    .map_err(|_| DailError::Config(format!("invalid host port: {}", parts[0])))?;
+                let jail_port: u16 = parts[1]
+                    .parse()
+                    .map_err(|_| DailError::Config(format!("invalid jail port: {}", parts[1])))?;
+                Ok(PortMapping {
+                    host_ip: None,
+                    host_port,
+                    jail_port,
+                    proto,
+                })
+            }
+            3 => {
+                let host_ip = parts[0].to_string();
+                let host_port: u16 = parts[1]
+                    .parse()
+                    .map_err(|_| DailError::Config(format!("invalid host port: {}", parts[1])))?;
+                let jail_port: u16 = parts[2]
+                    .parse()
+                    .map_err(|_| DailError::Config(format!("invalid jail port: {}", parts[2])))?;
+                Ok(PortMapping {
+                    host_ip: Some(host_ip),
+                    host_port,
+                    jail_port,
+                    proto,
+                })
+            }
+            _ => Err(DailError::Config(format!(
+                "invalid port mapping: {s}. Expected [host_ip:]host_port:jail_port[/proto]"
+            ))),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct JailConfig {
     pub name: String,
@@ -211,6 +271,8 @@ pub struct JailConfig {
     pub log_file: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ports: Vec<PortMapping>,
 }
 
 impl JailConfig {
@@ -229,6 +291,7 @@ impl JailConfig {
             cmd: None,
             log_file: None,
             image_ref: None,
+            ports: Vec::new(),
         }
     }
 }

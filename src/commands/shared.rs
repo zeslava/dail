@@ -1,4 +1,4 @@
-use crate::jail::config::{GlobalConfig, JailConfig, JailType, MountSpec};
+use crate::jail::config::{GlobalConfig, JailConfig, JailType, MountSpec, PortMapping};
 use crate::jail::preset::Preset;
 use crate::network::{NetworkConfig, next_free_ip};
 use crate::storage;
@@ -21,6 +21,7 @@ pub struct CommonJailArgs<'a> {
     pub persist: bool,
     pub preset: Option<&'a str>,
     pub network: Option<&'a str>,
+    pub publish: &'a [String],
 }
 
 /// Additional flags for JailConfig that differ between create and run
@@ -223,6 +224,11 @@ pub fn build_jail_config(
     // Warn if base is not bootstrapped (non-fatal, will auto-download)
     validate_or_warn_base(&base_release, global);
 
+    let mut ports = Vec::new();
+    for p in common.publish {
+        ports.push(PortMapping::parse(p)?);
+    }
+
     let config = JailConfig {
         name,
         hostname: common.hostname.map(|s| s.to_string()),
@@ -237,6 +243,7 @@ pub fn build_jail_config(
         cmd: flags.cmd,
         log_file: flags.log_file,
         image_ref: flags.image_ref,
+        ports,
     };
 
     let info = AllocationInfo {

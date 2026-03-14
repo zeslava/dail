@@ -103,6 +103,10 @@ pub struct RunArgs {
     /// Run from a saved image (name:tag)
     #[arg(long, conflicts_with_all = ["build", "base"], add = ArgValueCompleter::new(completions::complete_image_refs))]
     pub image: Option<String>,
+
+    /// Publish port: [host_ip:]host_port:jail_port[/proto]
+    #[arg(short = 'p', long = "publish")]
+    pub publish: Vec<String>,
 }
 
 /// Find Dailfile by pattern (*.Dailfile or *.dailfile)
@@ -201,6 +205,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         persist: args.persist,
         preset: args.preset.as_deref(),
         network: args.network.as_deref(),
+        publish: &args.publish,
     };
 
     let flags = ConfigFlags {

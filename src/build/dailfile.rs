@@ -36,6 +36,10 @@ pub enum Instruction {
         name: String,
         create_user: bool,
     },
+    Expose {
+        host_port: u16,
+        jail_port: u16,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,6 +125,29 @@ impl Dailfile {
                 "LOG" => Instruction::Log {
                     path: rest.to_string(),
                 },
+                "EXPOSE" => {
+                    let parts: Vec<&str> = rest.split(':').collect();
+                    match parts.len() {
+                        1 => {
+                            let port: u16 = parts[0].trim().parse().map_err(|_| {
+                                DailError::Build(format!("line {}: invalid port: {}", line_num + 1, parts[0]))
+                            })?;
+                            Instruction::Expose { host_port: port, jail_port: port }
+                        }
+                        2 => {
+                            let host_port: u16 = parts[0].trim().parse().map_err(|_| {
+                                DailError::Build(format!("line {}: invalid host port: {}", line_num + 1, parts[0]))
+                            })?;
+                            let jail_port: u16 = parts[1].trim().parse().map_err(|_| {
+                                DailError::Build(format!("line {}: invalid jail port: {}", line_num + 1, parts[1]))
+                            })?;
+                            Instruction::Expose { host_port, jail_port }
+                        }
+                        _ => return Err(DailError::Build(format!(
+                            "line {}: EXPOSE requires port or host_port:jail_port", line_num + 1
+                        ))),
+                    }
+                }
                 "SERVICE" => {
                     let mut parts = rest.split_whitespace();
                     let svc_name = parts

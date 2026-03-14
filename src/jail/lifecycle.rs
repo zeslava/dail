@@ -230,6 +230,17 @@ impl JailLifecycle {
         // 5. Network setup
         let epair = network::setup_network(&state.config.name, &state.config.network)?;
 
+        // 5b. Port forwarding via PF
+        if let NetworkConfig::Alias { ref ip, .. } = state.config.network {
+            if !state.config.ports.is_empty() {
+                crate::freebsd::pf::setup_port_forwarding(
+                    &state.config.name,
+                    ip,
+                    &state.config.ports,
+                );
+            }
+        }
+
         // 6. Resource limits
         for (resource, value) in &state.config.limits {
             crate::freebsd::rctl::Rctl::add_limit(&state.config.name, resource, value)
@@ -331,6 +342,11 @@ impl JailLifecycle {
         let mounts = state.config.mounts.clone();
         let epair = state.epair.clone();
         let jail_type = state.config.jail_type;
+        let has_ports = !state.config.ports.is_empty();
+
+        if has_ports {
+            crate::freebsd::pf::teardown_port_forwarding(name);
+        }
 
         network::teardown_network(name, &network, epair.as_deref())?;
         let _ = crate::freebsd::rctl::Rctl::remove_limits(name);
