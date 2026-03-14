@@ -44,7 +44,7 @@ fn validate_or_warn_base(base_name: &str, global: &GlobalConfig) {
     let backend = storage::get_backend(global);
     match backend.list_bases(global) {
         Ok(bases) => {
-            if !bases.iter().any(|(name, _)| name == base_name) {
+            if !bases.iter().any(|(name, _)| name == base_name || name.starts_with(&format!("{base_name}-"))) {
                 eprintln!("⚠ Warning: base '{}' not bootstrapped yet.", base_name);
                 if !bases.is_empty() {
                     let available: Vec<&str> = bases.iter().map(|(n, _)| n.as_str()).collect();
