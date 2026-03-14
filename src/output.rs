@@ -94,7 +94,7 @@ pub fn print_table(jails: &[&JailState]) {
         return;
     }
 
-    let mut table = Table::new(vec!["NAME", "TYPE", "STATUS", "JID", "IP", "BASE", "CREATED"]);
+    let mut table = Table::new(vec!["NAME", "STATUS", "JID", "IP", "BASE", "TYPE", "CREATED"]);
 
     for jail in jails {
         let jid = jail.jid.map(|j| j.to_string()).unwrap_or_else(|| "-".to_string());
@@ -110,11 +110,11 @@ pub fn print_table(jails: &[&JailState]) {
 
         table.add_row(vec![
             jail.name().to_string(),
-            jail_type,
             colored_status(&jail.status),
             jid,
             ip,
             base,
+            jail_type,
             created,
         ]);
     }
