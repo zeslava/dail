@@ -21,12 +21,18 @@ fn default_interface() -> Option<String> {
 fn check_pf_anchor() {
     let content = match std::fs::read_to_string("/etc/pf.conf") {
         Ok(c) => c,
-        Err(_) => {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             eprintln!(
-                "warning: cannot read /etc/pf.conf — port forwarding may not work.\n\
-                 Add the following line to /etc/pf.conf:\n\
+                "warning: /etc/pf.conf not found — PF is not configured.\n\
+                 Port forwarding requires PF. Enable it in /etc/rc.conf:\n\
+                 \n  pf_enable=\"YES\"\n\
+                 \nThen create /etc/pf.conf with at least:\n\
                  \n  rdr-anchor \"dail/*\"\n"
             );
+            return;
+        }
+        Err(_) => {
+            eprintln!("warning: cannot read /etc/pf.conf — port forwarding may not work.");
             return;
         }
     };
