@@ -28,7 +28,7 @@ pub fn run(args: StopArgs) -> anyhow::Result<()> {
 
     let names: Vec<String> = if args.all {
         lifecycle.list().iter()
-            .filter(|j| j.status == JailStatus::Running)
+            .filter(|j| j.status == JailStatus::Running || j.status == JailStatus::Idle)
             .map(|j| j.name().to_string())
             .collect()
     } else {

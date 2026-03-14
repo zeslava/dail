@@ -326,7 +326,9 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         }
     } else {
         if let Some(existing) = lifecycle.get(&jail_name) {
-            if existing.status == crate::jail::state::JailStatus::Running {
+            if existing.status == crate::jail::state::JailStatus::Running
+                || existing.status == crate::jail::state::JailStatus::Idle
+            {
                 anyhow::bail!(
                     "jail '{}' is already running. Use `dail rm --force {}` or `dail stop {}`.",
                     jail_name, jail_name, jail_name

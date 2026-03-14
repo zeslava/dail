@@ -7,7 +7,7 @@ use crate::jail::state::JailStatus;
 use crate::storage;
 use crate::store::DailStore;
 
-fn load_jail_names(filter: Option<JailStatus>) -> Vec<CompletionCandidate> {
+fn load_jail_names(filter: Option<&[JailStatus]>) -> Vec<CompletionCandidate> {
     let Ok(config) = GlobalConfig::load() else {
         return Vec::new();
     };
@@ -15,8 +15,8 @@ fn load_jail_names(filter: Option<JailStatus>) -> Vec<CompletionCandidate> {
         return Vec::new();
     };
     let mut jails = store.list();
-    if let Some(status) = filter {
-        jails.retain(|j| j.status == status);
+    if let Some(statuses) = filter {
+        jails.retain(|j| statuses.contains(&j.status));
     }
     jails.sort_by(|a, b| a.config.name.cmp(&b.config.name));
     jails
@@ -31,7 +31,7 @@ pub fn complete_jail_names(_current: &std::ffi::OsStr) -> Vec<CompletionCandidat
 }
 
 pub fn complete_running_jail_names(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {
-    load_jail_names(Some(JailStatus::Running))
+    load_jail_names(Some(&[JailStatus::Running, JailStatus::Idle]))
 }
 
 pub fn complete_image_refs(_current: &std::ffi::OsStr) -> Vec<CompletionCandidate> {

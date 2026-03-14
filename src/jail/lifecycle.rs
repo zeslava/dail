@@ -318,7 +318,7 @@ impl JailLifecycle {
             .get(name)
             .ok_or_else(|| DailError::JailNotFound(name.to_string()))?;
 
-        if state.status != JailStatus::Running {
+        if state.status != JailStatus::Running && state.status != JailStatus::Idle {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
                 status: format!("{}, not running", state.status),
@@ -388,7 +388,7 @@ impl JailLifecycle {
             .get(name)
             .ok_or_else(|| DailError::JailNotFound(name.to_string()))?;
 
-        if state.status == JailStatus::Running {
+        if state.status == JailStatus::Running || state.status == JailStatus::Idle {
             if force {
                 self.stop(name)?;
             } else {
@@ -439,7 +439,7 @@ impl JailLifecycle {
             .get(name)
             .ok_or_else(|| DailError::JailNotFound(name.to_string()))?;
 
-        if state.status != JailStatus::Running {
+        if state.status != JailStatus::Running && state.status != JailStatus::Idle {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
                 status: format!("{}, not running", state.status),
@@ -456,7 +456,7 @@ impl JailLifecycle {
             .get(name)
             .ok_or_else(|| DailError::JailNotFound(name.to_string()))?;
 
-        if state.status != JailStatus::Running {
+        if state.status != JailStatus::Running && state.status != JailStatus::Idle {
             return Err(DailError::InvalidState {
                 name: name.to_string(),
                 status: format!("{}, not running", state.status),

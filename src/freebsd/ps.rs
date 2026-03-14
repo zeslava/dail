@@ -7,6 +7,15 @@ pub struct JailResourceUsage {
     pub nproc: u32,
 }
 
+/// Check if a jail has any running processes.
+pub fn jail_has_processes(jid: i32) -> bool {
+    Command::new("ps")
+        .args(["-o", "pid=", "-J", &jid.to_string()])
+        .output()
+        .map(|o| o.status.success() && o.stdout.iter().any(|&b| b.is_ascii_digit()))
+        .unwrap_or(false)
+}
+
 /// Collect aggregate CPU%, RSS, and process count for a jail by JID.
 /// Uses `ps -o pcpu=,rss= -J <jid>` — works without root.
 /// Returns default (zeros) if the jail has no processes or JID is stale.

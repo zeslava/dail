@@ -31,7 +31,7 @@ pub fn run(args: LsArgs) -> anyhow::Result<()> {
     let jails: Vec<_> = lifecycle
         .list()
         .into_iter()
-        .filter(|j| !args.running || j.status == JailStatus::Running)
+        .filter(|j| !args.running || j.status == JailStatus::Running || j.status == JailStatus::Idle)
         .collect();
 
     if args.quiet {

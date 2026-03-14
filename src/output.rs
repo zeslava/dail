@@ -9,6 +9,7 @@ fn colored_status(status: &JailStatus) -> String {
     }
     match status {
         JailStatus::Running => format!("\x1b[32m{s}\x1b[0m"),  // green
+        JailStatus::Idle => format!("\x1b[33m{s}\x1b[0m"),     // yellow
         JailStatus::Stopped => format!("\x1b[31m{s}\x1b[0m"),  // red
         JailStatus::Created => format!("\x1b[33m{s}\x1b[0m"),  // yellow
     }

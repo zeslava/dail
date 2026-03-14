@@ -5,11 +5,13 @@ use uuid::Uuid;
 
 use super::config::JailConfig;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum JailStatus {
+    #[default]
     Created,
     Running,
+    Idle,
     Stopped,
 }
 
@@ -18,6 +20,7 @@ impl std::fmt::Display for JailStatus {
         match self {
             JailStatus::Created => write!(f, "created"),
             JailStatus::Running => write!(f, "running"),
+            JailStatus::Idle => write!(f, "idle"),
             JailStatus::Stopped => write!(f, "stopped"),
         }
     }
@@ -27,7 +30,9 @@ impl std::fmt::Display for JailStatus {
 pub struct JailState {
     pub id: String,
     pub config: JailConfig,
+    #[serde(skip)]
     pub status: JailStatus,
+    #[serde(skip)]
     pub jid: Option<i32>,
     pub root_path: PathBuf,
     pub created_at: DateTime<Utc>,

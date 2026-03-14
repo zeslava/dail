@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crate::error::DailError;
 use crate::freebsd::jail_sys::JailSys;
+use crate::freebsd::ps;
 use crate::jail::config::GlobalConfig;
 use crate::jail::state::{JailState, JailStatus};
 
@@ -57,7 +58,7 @@ impl DailStore {
             jails_dir,
         };
 
-        store.reconcile_with_jls();
+        store.hydrate_status();
         Ok(store)
     }
 
@@ -91,38 +92,37 @@ impl DailStore {
             Vec::new()
         };
 
-        Ok(Self {
+        let mut store = Self {
             jails,
             state_path,
             jails_dir,
-        })
+        };
+        store.hydrate_status();
+        Ok(store)
     }
 
-    /// Cross-reference state.json with `jls` output.
-    /// Fixes stale "running" status after host reboot or jail crash.
-    fn reconcile_with_jls(&mut self) {
-        let running_names: HashSet<String> = JailSys::list()
+    /// Compute status and jid from kernel state (`jls`).
+    /// Status is never persisted — always derived from `started_at` + `jls`.
+    fn hydrate_status(&mut self) {
+        let running_jails: HashMap<String, i32> = JailSys::list()
             .unwrap_or_default()
             .into_iter()
-            .map(|j| j.name)
+            .map(|j| (j.name, j.jid))
             .collect();
 
-        let mut changed = false;
         for jail in &mut self.jails {
-            if jail.status == JailStatus::Running && !running_names.contains(&jail.config.name) {
-                tracing::debug!(
-                    "jail '{}' marked as running but not found in jls, marking as stopped",
-                    jail.config.name
-                );
+            if let Some(&jid) = running_jails.get(&jail.config.name) {
+                jail.jid = Some(jid);
+                jail.status = if ps::jail_has_processes(jid) {
+                    JailStatus::Running
+                } else {
+                    JailStatus::Idle
+                };
+            } else if jail.started_at.is_some() {
                 jail.status = JailStatus::Stopped;
                 jail.jid = None;
-                jail.epair = None;
-                changed = true;
             }
-        }
-
-        if changed {
-            let _ = self.save_index();
+            // else: started_at is None → default Created
         }
     }
 
