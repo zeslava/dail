@@ -118,21 +118,22 @@ pub fn setup_port_forwarding(jail_name: &str, jail_ip: &str, ports: &[PortMappin
 /// Flush all PF rules from the `dail/<jail_name>` anchor.
 pub fn teardown_port_forwarding(jail_name: &str) {
     let anchor = format!("dail/{}", jail_name);
-    match Command::new("pfctl")
-        .args(["-a", &anchor, "-F", "all"])
-        .stderr(std::process::Stdio::piped())
-        .output()
-    {
-        Ok(output) if !output.status.success() => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // Don't warn if anchor simply doesn't exist
-            if !stderr.contains("does not exist") {
-                tracing::warn!("pfctl flush for '{}': {}", jail_name, stderr.trim());
+    for table in &["rules", "nat"] {
+        match Command::new("pfctl")
+            .args(["-a", &anchor, "-F", table])
+            .stderr(std::process::Stdio::piped())
+            .output()
+        {
+            Ok(output) if !output.status.success() => {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                if !stderr.contains("does not exist") {
+                    tracing::warn!("pfctl -F {} for '{}': {}", table, jail_name, stderr.trim());
+                }
             }
+            Err(e) => {
+                tracing::warn!("pfctl teardown for '{}': {}", jail_name, e);
+            }
+            _ => {}
         }
-        Err(e) => {
-            tracing::warn!("pfctl teardown for '{}': {}", jail_name, e);
-        }
-        _ => {}
     }
 }
