@@ -19,6 +19,8 @@ impl BuildExecutor {
         // Build always uses thick jail — we need a writable rootfs
         jail_config.jail_type = crate::jail::config::JailType::Thick;
 
+        let has_cli_ports = cli_config.map_or(false, |c| !c.ports.is_empty());
+
         tracing::debug!("Parsing Dailfile instructions...");
         for instruction in &dailfile.instructions {
             match instruction {
@@ -51,12 +53,15 @@ impl BuildExecutor {
                     jail_config.log_file = Some(path.clone());
                 }
                 Instruction::Expose { host_port, jail_port } => {
-                    jail_config.ports.push(PortMapping {
-                        host_ip: None,
-                        host_port: *host_port,
-                        jail_port: *jail_port,
-                        proto: "tcp".to_string(),
-                    });
+                    // Skip EXPOSE if -p was provided on CLI
+                    if !has_cli_ports {
+                        jail_config.ports.push(PortMapping {
+                            host_ip: None,
+                            host_port: *host_port,
+                            jail_port: *jail_port,
+                            proto: "tcp".to_string(),
+                        });
+                    }
                 }
                 _ => {}
             }

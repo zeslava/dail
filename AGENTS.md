@@ -18,7 +18,8 @@ src/
     create.rs, run.rs, start.rs, stop.rs, rm.rs, ls.rs,
     exec.rs, console.rs, inspect.rs, restart.rs,
     build.rs, bootstrap.rs, snapshot.rs, clone.rs,
-    preset.rs, config_init.rs
+    preset.rs, config_init.rs, config_show.rs,
+    top.rs, cache.rs, image.rs, logs.rs, shared.rs
   jail/                # jail core logic
     config.rs          # GlobalConfig, JailConfig, JailType, MountSpec
     state.rs           # JailState, JailStatus

@@ -8,6 +8,7 @@ Daily jail management for FreeBSD
 - **Presets:** one flag to configure common workloads (`--preset postgres`)
 - **Thick & thin jails:** full copy or shared base with per-jail overlay
 - **Networking:** inherit, IP alias, or VNET with bridge
+- **Port forwarding:** `-p host_port:jail_port` via PF rdr anchors
 - **ZFS support:** snapshots, clones, ZFS-backed storage
 - **Resource limits:** rctl-based CPU/memory/process limits
 
@@ -59,6 +60,7 @@ dail create myjail --type thin --base 14.2-RELEASE
 dail create myjail --preset postgres                        # apply preset
 dail create web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
 dail create app --mount /data/app:/app --allow raw_sockets --limit maxproc=256
+dail create web -p 8080:80                                  # port forwarding via PF
 ```
 
 **`dail run`** — Create and start a jail in one step. Same options as `create`, plus `--rm`, `--build`, `--rebuild`, `--image`.
@@ -73,6 +75,8 @@ dail run postgres-jail --build examples/postgres/Dailfile # build + start
 dail run postgres-jail --build examples/postgres/Dailfile --rebuild  # rebuild from scratch
 dail run pg --image postgres:18                             # run from saved image
 dail run pg --image postgres:18 --ip 10.100.0.50 --persist  # with overrides
+dail run web -p 8080:80                                     # port forwarding
+dail run web -p 8080:80/tcp -p 5432:5432                    # multiple ports
 ```
 
 **`dail start`** / **`stop`** / **`restart`** — Manage jail state.
@@ -146,8 +150,18 @@ dail logs myjail --file /var/log/messages  # read arbitrary file from jail rootf
 
 Dailfile example:
 ```dockerfile
-SERVICE postgresql
+SERVICE postgresql          # auto-creates user/group/dirs, use --no-user to skip
 LOG /var/log/postgresql.log
+EXPOSE 5432                 # port forwarding (host_port:jail_port or just port)
+```
+
+### Monitoring
+
+**`dail top`** — Show running processes inside a jail.
+
+```bash
+dail top myjail                     # watch mode (refreshes every 2s)
+dail top myjail --once              # single snapshot
 ```
 
 ### Build
@@ -302,6 +316,30 @@ Full network stack isolation with bridged networking:
 ```bash
 dail create app --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1 --vnet-bridge bridge0
 ```
+
+### Port Forwarding
+
+Forward host ports to jail ports using PF rdr anchors:
+
+```bash
+dail run web -p 8080:80                    # forward host:8080 → jail:80
+dail run web -p 8080:80/tcp -p 5432:5432   # multiple ports, optional proto
+```
+
+Requires PF enabled with the dail anchor in `/etc/pf.conf`:
+
+```
+rdr-anchor "dail/*"
+```
+
+In Dailfile, use `EXPOSE` to declare default port mappings:
+
+```dockerfile
+EXPOSE 5432
+EXPOSE 8080:80
+```
+
+If `-p` is passed on the CLI, all `EXPOSE` directives are ignored.
 
 ### Host Network (inherit)
 
