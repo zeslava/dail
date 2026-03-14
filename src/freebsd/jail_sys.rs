@@ -29,12 +29,19 @@ pub struct JailParams {
 /// A running jail as reported by `jls`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JailInfo {
+    #[serde(deserialize_with = "deserialize_jid")]
     pub jid: i32,
     pub name: String,
     pub path: String,
+    #[serde(default, rename = "host.hostname")]
     pub hostname: String,
     #[serde(default)]
     pub ip4: String,
+}
+
+fn deserialize_jid<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<i32, D::Error> {
+    let s: &str = serde::Deserialize::deserialize(deserializer)?;
+    s.parse().map_err(serde::de::Error::custom)
 }
 
 /// Low-level jail operations. Shells out to `jail(8)` / `jls(8)` / `jexec(8)`.
