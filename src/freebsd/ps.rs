@@ -21,7 +21,7 @@ pub fn jail_has_processes(jid: i32) -> bool {
 /// Returns default (zeros) if the jail has no processes or JID is stale.
 pub fn jail_usage(jid: i32) -> JailResourceUsage {
     let output = match Command::new("ps")
-        .args(["-o", "pcpu=,rss=", "-J", &jid.to_string()])
+        .args(["-o", "pcpu=", "-o", "rss=", "-J", &jid.to_string()])
         .output()
     {
         Ok(o) => o,
