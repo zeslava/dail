@@ -61,7 +61,7 @@ impl BuildExecutor {
             .any(|i| matches!(i, Instruction::Cmd { .. }));
         if !has_explicit_cmd {
             for instruction in &dailfile.instructions {
-                if let Instruction::Service { name } = instruction {
+                if let Instruction::Service { name, .. } = instruction {
                     jail_config.cmd = Some(format!("service {name} start"));
                     break;
                 }
@@ -213,8 +213,32 @@ impl BuildExecutor {
                                 DailError::Build(format!("failed to write /etc/profile: {e}"))
                             })?;
                         }
-                        Instruction::Service { name: svc } => {
+                        Instruction::Service {
+                            name: svc,
+                            create_user,
+                        } => {
                             tracing::info!("SERVICE {}", svc);
+
+                            if *create_user {
+                                tracing::info!("SERVICE {}: creating user/group/dirs", svc);
+                                let setup_script = format!(
+                                    "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc} && \
+                                     pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc} -g {svc} -m -s /usr/sbin/nologin && \
+                                     mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
+                                     chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc}"
+                                );
+                                let status = lifecycle.exec(
+                                    name,
+                                    &["/bin/sh", "-c", &setup_script],
+                                )?;
+                                if !status.success() {
+                                    return Err(DailError::Build(format!(
+                                        "SERVICE {svc}: failed to create user/group/dirs (exit code {:?})",
+                                        status.code()
+                                    )));
+                                }
+                            }
+
                             let rc_conf = root_path.join("etc/rc.conf");
                             use std::io::Write;
                             let mut f = std::fs::OpenOptions::new()

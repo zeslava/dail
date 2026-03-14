@@ -34,6 +34,7 @@ pub enum Instruction {
     },
     Service {
         name: String,
+        create_user: bool,
     },
 }
 
@@ -120,9 +121,23 @@ impl Dailfile {
                 "LOG" => Instruction::Log {
                     path: rest.to_string(),
                 },
-                "SERVICE" => Instruction::Service {
-                    name: rest.to_string(),
-                },
+                "SERVICE" => {
+                    let mut parts = rest.split_whitespace();
+                    let svc_name = parts
+                        .next()
+                        .ok_or_else(|| {
+                            DailError::Build(format!(
+                                "line {}: SERVICE requires a name",
+                                line_num + 1
+                            ))
+                        })?
+                        .to_string();
+                    let create_user = !parts.any(|p| p == "--no-user");
+                    Instruction::Service {
+                        name: svc_name,
+                        create_user,
+                    }
+                }
                 other => {
                     return Err(DailError::Build(format!(
                         "line {}: unknown instruction: {other}",
