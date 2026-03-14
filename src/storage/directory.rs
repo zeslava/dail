@@ -108,6 +108,10 @@ impl StorageBackend for DirectoryBackend {
             match jail_config.jail_type {
                 JailType::Thick => {
                     tracing::info!("Copying base system to {}", root_path.display());
+                    let _ = std::process::Command::new("chflags")
+                        .args(["-R", "noschg"])
+                        .arg(&root_path)
+                        .status();
                     std::fs::remove_dir_all(&root_path)?;
                     std::fs::create_dir(&root_path)?;
                     let status = std::process::Command::new("cp")
