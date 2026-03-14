@@ -96,8 +96,8 @@ pub struct RunArgs {
     #[arg(long)]
     pub build: Option<String>,
 
-    /// Remove existing jail and rebuild (requires --build)
-    #[arg(long, requires = "build")]
+    /// Remove existing jail and rebuild
+    #[arg(long)]
     pub rebuild: bool,
 
     /// Run from a saved image (name:tag)
@@ -287,13 +287,12 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             if args.rebuild {
                 lifecycle.remove(&jail_name, true)?;
                 println!("Jail '{}' removed for rebuild.", jail_name);
-            } else if existing.is_stopped() {
-                // Auto-remove stopped jail (e.g. after reconcile or previous build)
-                lifecycle.remove(&jail_name, false)?;
-                println!("Jail '{}' (stopped) removed for rebuild.", jail_name);
+            } else if existing.is_stopped() || existing.status == crate::jail::state::JailStatus::Idle {
+                lifecycle.remove(&jail_name, existing.status == crate::jail::state::JailStatus::Idle)?;
+                println!("Jail '{}' removed for rebuild.", jail_name);
             } else {
                 anyhow::bail!(
-                    "Jail '{}' already exists and is running. Use --rebuild to force rebuild.",
+                    "Jail '{}' is running. Use --rebuild to force rebuild.",
                     jail_name
                 );
             }
