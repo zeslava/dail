@@ -37,6 +37,8 @@ pub struct JailInfo {
     pub hostname: String,
     #[serde(default)]
     pub ip4: String,
+    #[serde(default)]
+    pub meta: String,
 }
 
 fn deserialize_jid<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<i32, D::Error> {
@@ -67,6 +69,7 @@ impl JailSys {
         if params.persist {
             args.push("persist".to_string());
         }
+        args.push("meta=dail".to_string());
         for (k, v) in &params.extra {
             args.push(format!("{k}={v}"));
         }

@@ -4,9 +4,9 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 
 use crate::error::DailError;
-use crate::freebsd::jail_sys::JailSys;
+use crate::freebsd::jail_sys::{JailInfo, JailSys};
 use crate::freebsd::ps;
-use crate::jail::config::GlobalConfig;
+use crate::jail::config::{GlobalConfig, JailConfig};
 use crate::jail::state::{JailState, JailStatus};
 
 pub struct DailStore {
@@ -103,17 +103,18 @@ impl DailStore {
 
     /// Compute status and jid from kernel state (`jls`).
     /// Status is never persisted — always derived from `started_at` + `jls`.
+    /// Also discovers orphan jails (in kernel with meta=dail but not in store).
     fn hydrate_status(&mut self) {
-        let running_jails: HashMap<String, i32> = JailSys::list()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|j| (j.name, j.jid))
+        let kernel_jails: Vec<JailInfo> = JailSys::list().unwrap_or_default();
+        let mut running_jails: HashMap<String, &JailInfo> = kernel_jails
+            .iter()
+            .map(|j| (j.name.clone(), j))
             .collect();
 
         for jail in &mut self.jails {
-            if let Some(&jid) = running_jails.get(&jail.config.name) {
-                jail.jid = Some(jid);
-                jail.status = if ps::jail_has_processes(jid) {
+            if let Some(info) = running_jails.remove(&jail.config.name) {
+                jail.jid = Some(info.jid);
+                jail.status = if ps::jail_has_processes(info.jid) {
                     JailStatus::Running
                 } else {
                     JailStatus::Idle
@@ -123,6 +124,27 @@ impl DailStore {
                 jail.jid = None;
             }
             // else: started_at is None → default Created
+        }
+
+        // Remaining kernel jails with meta=dail are orphans
+        for (_, info) in running_jails {
+            if info.meta != "dail" {
+                continue;
+            }
+            let status = if ps::jail_has_processes(info.jid) {
+                JailStatus::Running
+            } else {
+                JailStatus::Idle
+            };
+            let config = JailConfig {
+                name: info.name.clone(),
+                hostname: Some(info.hostname.clone()),
+                ..Default::default()
+            };
+            let mut state = JailState::new(config, PathBuf::from(&info.path));
+            state.jid = Some(info.jid);
+            state.status = status;
+            self.jails.push(state);
         }
     }
 

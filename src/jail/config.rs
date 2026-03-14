@@ -186,7 +186,7 @@ fn default_mount_type() -> String {
     "nullfs".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct JailConfig {
     pub name: String,
     pub hostname: Option<String>,
