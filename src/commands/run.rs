@@ -326,23 +326,32 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         }
     } else {
         if let Some(existing) = lifecycle.get(&jail_name) {
-            if existing.status == crate::jail::state::JailStatus::Running {
-                anyhow::bail!(
-                    "jail '{}' is already running. Use `dail rm --force {}` or `dail stop {}`.",
-                    jail_name, jail_name, jail_name
-                );
+            match existing.status {
+                crate::jail::state::JailStatus::Running => {
+                    anyhow::bail!(
+                        "jail '{}' is already running. Use `dail rm --force {}` or `dail stop {}`.",
+                        jail_name, jail_name, jail_name
+                    );
+                }
+                crate::jail::state::JailStatus::Idle => {
+                    // Jail in kernel but no processes — stop and restart
+                    lifecycle.stop(&jail_name)?;
+                    println!("Jail '{}' stopped (was idle).", jail_name);
+                }
+                crate::jail::state::JailStatus::Stopped | crate::jail::state::JailStatus::Created => {
+                    // Existing jail, just start it
+                }
             }
-            lifecycle.remove(&jail_name, existing.status == crate::jail::state::JailStatus::Idle)?;
+        } else {
+            let state = lifecycle.create(config)?;
+            println!("Jail '{}' created (id: {})", state.name(), &state.id[..8]);
+
+            if let Some(ip) = info.allocated_ip {
+                println!("IP allocated: {} on {}", ip, global.alias_interface);
+            }
+
+            println!("Base: {}", info.base_release);
         }
-
-        let state = lifecycle.create(config)?;
-        println!("Jail '{}' created (id: {})", state.name(), &state.id[..8]);
-
-        if let Some(ip) = info.allocated_ip {
-            println!("IP allocated: {} on {}", ip, global.alias_interface);
-        }
-
-        println!("Base: {}", info.base_release);
     }
 
     if let Err(e) = lifecycle.start(&jail_name) {
