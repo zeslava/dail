@@ -49,7 +49,7 @@ pub struct Dailfile {
 
 impl Dailfile {
     pub fn parse(input: &str) -> Result<Self, DailError> {
-        tracing::info!("Starting Dailfile parse ({} bytes)", input.len());
+        tracing::info!("Parsing .dail file ({} bytes)", input.len());
         let mut instructions = Vec::new();
 
         for (line_num, line) in input.lines().enumerate() {
@@ -176,7 +176,7 @@ impl Dailfile {
             instructions.push(instruction);
         }
 
-        tracing::info!("Dailfile parsed: {} instructions", instructions.len());
+        tracing::info!("Parsed: {} instructions", instructions.len());
         Ok(Dailfile { instructions })
     }
 }

@@ -16,16 +16,15 @@ Examples:
   dail run pg                                               Create and start with defaults
   dail run pg --preset postgres                             Apply postgres preset
   dail run pg --rm                                          Auto-remove on stop
-  dail run ./examples/postgres/Dailfile pg                  Build Dailfile, name jail 'pg'
-  dail run ./examples/postgres/Dailfile                     Build with auto-generated name
-  dail run                                                  Auto-detect ./Dailfile
-  dail run ./examples/postgres/Dailfile pg --rebuild        Rebuild from scratch")]
+  dail run ./examples/postgres/pg.dail pg                   Build .dail file, name jail 'pg'
+  dail run ./examples/postgres/pg.dail                      Build with auto-generated name
+  dail run ./examples/postgres/pg.dail pg --rebuild         Rebuild from scratch")]
 pub struct RunArgs {
-    /// Jail name or Dailfile path
+    /// Jail name or .dail file path
     #[arg(add = ArgValueCompleter::new(completions::complete_run_first))]
     pub first: Option<String>,
 
-    /// Jail name (when first argument is a Dailfile path)
+    /// Jail name (when first argument is a .dail file path)
     pub second: Option<String>,
 
     /// FreeBSD base release (e.g. 14.0-RELEASE)
@@ -92,7 +91,7 @@ pub struct RunArgs {
     #[arg(long)]
     pub rm: bool,
 
-    /// Build from Dailfile before starting
+    /// Build from .dail file before starting
     #[arg(long)]
     pub build: Option<String>,
 
@@ -109,39 +108,6 @@ pub struct RunArgs {
     pub publish: Vec<String>,
 }
 
-/// Find Dailfile by pattern (*.Dailfile or *.dailfile)
-fn find_dailfile_pattern() -> Option<String> {
-    use std::fs;
-
-    if let Ok(entries) = fs::read_dir(".") {
-        let mut dailfiles: Vec<_> = entries
-            .filter_map(|entry| {
-                entry.ok().and_then(|e| {
-                    let path = e.path();
-                    let filename = path.file_name()?;
-                    let name = filename.to_str()?;
-
-                    // Match *.Dailfile or *.dailfile
-                    if (name.ends_with(".Dailfile") || name.ends_with(".dailfile"))
-                        && path.is_file()
-                    {
-                        Some(name.to_string())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .collect();
-
-        // Sort for consistent behavior
-        dailfiles.sort();
-
-        // Return first match
-        dailfiles.into_iter().next()
-    } else {
-        None
-    }
-}
 
 pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
@@ -151,32 +117,19 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let first = match args.first {
         Some(f) => f,
         None => {
-            // No args: auto-detect Dailfile in current dir
-            if std::path::Path::new("Dailfile").exists() {
-                "Dailfile".to_string()
-            } else if std::path::Path::new("dailfile").exists() {
-                "dailfile".to_string()
-            } else if let Some(path) = find_dailfile_pattern() {
-                path
-            } else {
-                anyhow::bail!(
-                    "No arguments and no Dailfile found.\nUsage: dail run <name> or dail run <Dailfile> [name]"
-                );
-            }
+            anyhow::bail!(
+                "Missing argument.\nUsage: dail run <name> or dail run <file.dail> [name]"
+            );
         }
     };
 
-    fn looks_like_dailfile(s: &str) -> bool {
-        s.ends_with(".Dailfile")
-            || s.ends_with(".dailfile")
-            || s == "Dailfile"
-            || s == "dailfile"
-            || s.contains('/')
+    fn looks_like_dail_file(s: &str) -> bool {
+        s.ends_with(".dail") || s.contains('/')
     }
 
     let jail_name;
-    if args.build.is_none() && looks_like_dailfile(&first) {
-        // first arg is a Dailfile path, second (if any) is the jail name
+    if args.build.is_none() && looks_like_dail_file(&first) {
+        // first arg is a .dail file path, second (if any) is the jail name
         jail_name = args.second.unwrap_or_else(|| {
             format!("dail-build-{}", &Uuid::new_v4().to_string()[..8])
         });
@@ -184,7 +137,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     } else {
         // first arg is the jail name
         if args.second.is_some() {
-            anyhow::bail!("unexpected second argument. Did you mean: dail run <Dailfile> <name>?");
+            anyhow::bail!("unexpected second argument. Did you mean: dail run <file.dail> <name>?");
         }
         jail_name = first;
     }
@@ -287,7 +240,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             println!("IP allocated: {} on {}", ip, global.alias_interface);
         }
     } else if let Some(ref dailfile_path) = args.build {
-        // --build mode: ignore create args, use Dailfile
+        // --build mode: ignore create args, use .dail file
         if let Some(existing) = lifecycle.get(&jail_name) {
             if args.rebuild {
                 lifecycle.remove(&jail_name, true)?;
@@ -302,13 +255,12 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
-        tracing::info!("Reading Dailfile from {}", dailfile_path);
+        tracing::info!("Reading {}", dailfile_path);
         let content = std::fs::read_to_string(dailfile_path)
-            .map_err(|_| anyhow::anyhow!("Dailfile not found: {dailfile_path}"))?;
-        tracing::info!("Dailfile read successfully ({} bytes)", content.len());
-        tracing::info!("Calling Dailfile::parse...");
+            .map_err(|_| anyhow::anyhow!("file not found: {dailfile_path}"))?;
+        tracing::info!("File read successfully ({} bytes)", content.len());
         let dailfile = Dailfile::parse(&content)?;
-        tracing::info!("Dailfile parsed successfully");
+        tracing::info!("Parsed successfully");
         let context_dir = std::path::Path::new(dailfile_path.as_str())
             .parent()
             .unwrap_or(std::path::Path::new("."))

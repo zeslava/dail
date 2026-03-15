@@ -50,7 +50,7 @@ enum Commands {
     Exec(commands::exec::ExecArgs),
     /// Open an interactive console in a jail
     Console(commands::console::ConsoleArgs),
-    /// Build a jail from a Dailfile
+    /// Build a jail from a .dail file
     Build(commands::build::BuildArgs),
     /// Create a ZFS snapshot of a jail
     Snapshot(commands::snapshot::SnapshotArgs),

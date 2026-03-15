@@ -4,7 +4,7 @@ Daily jail management for FreeBSD
 ## Features
 
 - **Familiar workflow:** `create`, `start`, `stop`, `rm`, `run`, `exec`, `build`
-- **Dailfile:** declarative jail builds
+- **`.dail` files:** declarative jail builds
 - **Presets:** one flag to configure common workloads (`--preset postgres`)
 - **Thick & thin jails:** full copy or shared base with per-jail overlay
 - **Networking:** inherit, IP alias, or VNET with bridge
@@ -71,8 +71,8 @@ dail run postgres-jail --preset postgres                    # with preset
 dail run temp --rm                                          # auto-remove on stop
 dail run web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
 dail run app --mount /data:/app --preset dev --limit maxproc=512
-dail run postgres-jail --build examples/postgres/Dailfile # build + start
-dail run postgres-jail --build examples/postgres/Dailfile --rebuild  # rebuild from scratch
+dail run postgres-jail --build examples/postgres/postgres.dail # build + start
+dail run postgres-jail --build examples/postgres/postgres.dail --rebuild  # rebuild from scratch
 dail run pg --image postgres:18                             # run from saved image
 dail run pg --image postgres:18 --ip 10.100.0.50 --persist  # with overrides
 dail run web -p 8080:80                                     # port forwarding
@@ -139,16 +139,16 @@ dail console myjail --shell /bin/csh
 
 ### Logs
 
-**`dail logs`** — View jail logs. By default reads CMD stdout/stderr (`cmd.log`). If `LOG` is set in Dailfile, reads that file from the jail rootfs instead. The log file is auto-created with write permissions at jail start.
+**`dail logs`** — View jail logs. By default reads CMD stdout/stderr (`cmd.log`). If `LOG` is set in the `.dail` file, reads that file from the jail rootfs instead. The log file is auto-created with write permissions at jail start.
 
 ```bash
-dail logs myjail                        # CMD output (or LOG file if set in Dailfile)
+dail logs myjail                        # CMD output (or LOG file if set in .dail)
 dail logs myjail --tail 20              # last 20 lines
 dail logs myjail -f                     # follow (like tail -f)
 dail logs myjail --file /var/log/messages  # read arbitrary file from jail rootfs
 ```
 
-Dailfile example:
+`.dail` file example:
 ```dockerfile
 SERVICE postgresql          # auto-creates user/group/dirs, use --no-user to skip
 LOG /var/log/postgresql.log
@@ -166,12 +166,12 @@ dail top myjail --once              # single snapshot
 
 ### Build
 
-**`dail build`** — Build a jail from a Dailfile.
+**`dail build`** — Build a jail from a `.dail` file.
 
 ```bash
-dail build Dailfile --name myapp
-dail build ./jails/web.dailfile --name web
-dail build examples/postgres/Dailfile --name tmp --tag postgres:18  # build → save as image
+dail build pg.dail --name myapp
+dail build ./jails/web.dail --name web
+dail build examples/postgres/postgres.dail --name tmp --tag postgres:18  # build → save as image
 ```
 
 ### Cache
@@ -332,7 +332,7 @@ Requires PF enabled with the dail anchor in `/etc/pf.conf`:
 rdr-anchor "dail/*"
 ```
 
-In Dailfile, use `EXPOSE` to declare default port mappings:
+In `.dail` files, use `EXPOSE` to declare default port mappings:
 
 ```dockerfile
 EXPOSE 5432

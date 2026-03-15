@@ -30,18 +30,18 @@
 
 - [x] **Extract shared builder** — deduplicate ~100 lines between `create.rs` and `run.rs`
 - [ ] **Remove dead code** — audit `#[allow(dead_code)]` in `src/freebsd/mod.rs`
-- [ ] **Add unit tests** — Dailfile parser, `next_free_ip()`, `validate_jail_name()`, `ImageRef::parse()`, store serde round-trip
+- [ ] **Add unit tests** — .dail parser, `next_free_ip()`, `validate_jail_name()`, `ImageRef::parse()`, store serde round-trip
 - [ ] **Extract IP allocation** — deduplicate between `shared.rs` and `clone.rs` into a reusable helper
 - [ ] **Protect build against crash-state** — build executor mutates persisted state for temporary needs; use separate build config or `building` flag
 - [ ] **Split `run.rs`** — extract image-mode and build-mode into separate functions/modules
-- [ ] **`dail apply <path-or-url>`** — clone/pull git repo, find Dailfile, build+run; key workflow for git-native distribution
+- [ ] **`dail apply <path-or-url>`** — clone/pull git repo, find .dail file, build+run; key workflow for git-native distribution
 - [x] **`dail top`** — show running processes inside a jail (jexec ps wrapper)
 - [x] **Image ref parsing** — extract helper, used in 4+ places
 - [ ] **Deprecation** — migrate `serde_yaml` → `serde_yml` or drop YAML support (TOML only)
 
 ## Phase 7: Tests
 
-- [ ] Dailfile parser — `Dailfile::parse()` (pure logic)
+- [ ] .dail parser — `Dailfile::parse()` (pure logic)
 - [ ] IP allocation — `next_free_ip()` (pure logic)
 - [ ] Jail name validation — `validate_jail_name()` (pure logic)
 - [ ] Store round-trip — `DailStore` serialize/deserialize with tempdir
@@ -53,7 +53,7 @@
 
 - [ ] Man page (`dail.1`)
 - [x] Document `--mount-ro` and `--network` flags in README
-- [ ] Document COPY host-path behavior in Dailfile reference
+- [ ] Document COPY host-path behavior in .dail file reference
 - [ ] Submit port to FreeBSD ports tree
 
 ---
@@ -67,7 +67,7 @@
 ### Other ideas
 
 - [ ] `dail cp <jail>:<path> <local>` — copy files from/to jail
-- [ ] Health checks in Dailfile (`HEALTHCHECK`)
+- [ ] Health checks in .dail files (`HEALTHCHECK`)
 - [ ] Volumes — named persistent storage
 - [ ] `dail kill` — force-stop without removal
 - [ ] `dail stats` — resource usage via rctl

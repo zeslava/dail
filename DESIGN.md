@@ -71,7 +71,7 @@ dail apply github.com/user/valkey
 Repositories contain:
 
 ```
-Dailfile
+postgres.dail
 Dail.lock
 README.md
 ```
@@ -97,9 +97,9 @@ If users want to run multiple services, they can run multiple jails.
 
 ---
 
-# 6. Dailfile Must Stay Simple
+# 6. .dail Files Must Stay Simple
 
-The Dailfile format is intentionally minimal.
+The `.dail` file format is intentionally minimal.
 
 Rules:
 

@@ -1,7 +1,7 @@
 # Project: Dail
 
 ## What This Project Does
-FreeBSD jail manager written in Rust. Docker-like UX (Dailfile, create/start/stop/rm) with jail-native semantics. Inspired by BastilleBSD and Docker.
+FreeBSD jail manager written in Rust. Docker-like UX (.dail files, create/start/stop/rm) with jail-native semantics. Inspired by BastilleBSD and Docker.
 
 ## Stack
 - **Language:** Rust (edition 2024)
@@ -31,12 +31,15 @@ src/
     ifconfig.rs        # interface management
     zfs.rs             # ZFS operations
     rctl.rs            # resource limits (rctl)
+    pf.rs              # PF port forwarding (rdr anchors)
+    ps.rs              # process stats (dail top)
   storage/             # jail filesystem backends
     mod.rs, directory.rs, zfs_backend.rs
   network/             # networking modes (alias, vnet, inherit)
     mod.rs
-  build/               # Dailfile parser + executor
+  build/               # .dail file parser + executor
     mod.rs, dailfile.rs, executor.rs
+  completions.rs       # dynamic shell completions (zsh/bash/fish)
 ```
 
 ## Key Rules for This Project
@@ -45,7 +48,7 @@ src/
 - `thiserror` for DailError, `anyhow` in command handlers
 - No `unwrap()` without safety comment
 - Presets: builtin hardcoded + user TOML in `/var/db/dail/presets/`
-- GlobalConfig lives at `/usr/local/etc/dail/config.toml`
+- GlobalConfig lives at `/usr/local/etc/dail/config.yaml` (TOML fallback supported)
 
 ## What NOT to Read (save tokens)
 - target/

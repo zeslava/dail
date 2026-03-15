@@ -14,14 +14,14 @@ impl BuildExecutor {
         cli_config: Option<&JailConfig>,
         context_dir: &std::path::Path,
     ) -> Result<(), DailError> {
-        tracing::info!("Building jail '{}' from Dailfile", name);
+        tracing::info!("Building jail '{}'", name);
         let mut jail_config = JailConfig::new(name.to_string());
         // Build always uses thick jail — we need a writable rootfs
         jail_config.jail_type = crate::jail::config::JailType::Thick;
 
         let has_cli_ports = cli_config.map_or(false, |c| !c.ports.is_empty());
 
-        tracing::debug!("Parsing Dailfile instructions...");
+        tracing::debug!("Processing instructions...");
         for instruction in &dailfile.instructions {
             match instruction {
                 Instruction::From { release } => {
@@ -81,7 +81,7 @@ impl BuildExecutor {
             }
         }
 
-        // CLI args override Dailfile (network, hostname, mounts from CLI take precedence)
+        // CLI args override .dail file (network, hostname, mounts from CLI take precedence)
         if let Some(cli) = cli_config {
             jail_config.network = cli.network.clone();
             if cli.hostname.is_some() {

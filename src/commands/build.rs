@@ -8,13 +8,12 @@ use clap::Args;
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
-  dail build                                  Use ./Dailfile in current dir
-  dail build Dailfile --name myapp            Same as above, explicit path
-  dail build ./jails/web.dailfile --name web  Build from custom path
-  dail build Dailfile --tag postgres:18       Save as image instead of jail")]
+  dail build pg.dail --name myapp             Build from .dail file
+  dail build ./jails/web.dail --name web      Build from custom path
+  dail build pg.dail --tag postgres:18        Save as image instead of jail")]
 pub struct BuildArgs {
-    /// Path to Dailfile (default: ./Dailfile in current dir)
-    pub dailfile: Option<String>,
+    /// Path to .dail file
+    pub dailfile: String,
     /// Jail name (required without --tag, auto-generated with --tag)
     #[arg(long)]
     pub name: Option<String>,
@@ -33,9 +32,9 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
         (None, None) => anyhow::bail!("--name is required when not using --tag"),
     };
 
-    let dailfile_path = args.dailfile.unwrap_or_else(|| "Dailfile".to_string());
+    let dailfile_path = args.dailfile;
     let content = std::fs::read_to_string(&dailfile_path)
-        .map_err(|_| anyhow::anyhow!("Dailfile not found: {dailfile_path}"))?;
+        .map_err(|_| anyhow::anyhow!("file not found: {dailfile_path}"))?;
     let dailfile = Dailfile::parse(&content)?;
 
     let context_dir = std::path::Path::new(&dailfile_path)
