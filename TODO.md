@@ -34,7 +34,7 @@
 - [ ] **Extract IP allocation** — deduplicate between `shared.rs` and `clone.rs` into a reusable helper
 - [ ] **Protect build against crash-state** — build executor mutates persisted state for temporary needs; use separate build config or `building` flag
 - [ ] **Split `run.rs`** — extract image-mode and build-mode into separate functions/modules
-- [ ] **`dail apply <path-or-url>`** — clone/pull git repo, find .dail file, build+run; key workflow for git-native distribution
+- [x] **Git URL support in `build` and `run`** — clone git repo, find .dail file, build+run; supports `//subdir` for nested projects
 - [x] **`dail top`** — show running processes inside a jail (jexec ps wrapper)
 - [x] **Image ref parsing** — extract helper, used in 4+ places
 - [ ] **Deprecation** — migrate `serde_yaml` → `serde_yml` or drop YAML support (TOML only)

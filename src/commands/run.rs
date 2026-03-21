@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::build::dailfile::Dailfile;
 use crate::build::executor::BuildExecutor;
+use crate::build::git;
 use crate::commands::shared::{self, CommonJailArgs, ConfigFlags};
 use crate::completions;
 use crate::image::{ImageRef, ImageStore};
@@ -18,9 +19,11 @@ Examples:
   dail run pg --rm                                          Auto-remove on stop
   dail run ./examples/postgres/pg.dail pg                   Build .dail file, name jail 'pg'
   dail run ./examples/postgres/pg.dail                      Build with auto-generated name
-  dail run ./examples/postgres/pg.dail pg --rebuild         Rebuild from scratch")]
+  dail run ./examples/postgres/pg.dail pg --rebuild         Rebuild from scratch
+  dail run https://github.com/user/repo.git pg              Build from git repo
+  dail run https://github.com/user/repo//jails/web pg       Build from subdirectory")]
 pub struct RunArgs {
-    /// Jail name or .dail file path
+    /// Jail name, .dail file path, or git URL
     #[arg(add = ArgValueCompleter::new(completions::complete_run_first))]
     pub first: Option<String>,
 
@@ -124,14 +127,19 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     };
 
     fn looks_like_dail_file(s: &str) -> bool {
-        s.ends_with(".dail") || s.contains('/')
+        s.ends_with(".dail") || s.contains('/') || git::is_git_url(s)
     }
 
     let jail_name;
     if args.build.is_none() && looks_like_dail_file(&first) {
         // first arg is a .dail file path, second (if any) is the jail name
         jail_name = args.second.unwrap_or_else(|| {
-            format!("dail-build-{}", &Uuid::new_v4().to_string()[..8])
+            // Derive name from filename: "myservice.dail" → "myservice"
+            std::path::Path::new(&first)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("dail-build-{}", &Uuid::new_v4().to_string()[..8]))
         });
         args.build = Some(first);
     } else {
@@ -255,17 +263,32 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
-        tracing::info!("Reading {}", dailfile_path);
-        let content = std::fs::read_to_string(dailfile_path)
-            .map_err(|_| anyhow::anyhow!("file not found: {dailfile_path}"))?;
+        // Resolve source: git URL or local path
+        let _git_source;
+        let (content, context_dir) = if git::is_git_url(dailfile_path) {
+            tracing::info!("Cloning git repository: {}", dailfile_path);
+            let src = git::clone_and_resolve(dailfile_path)?;
+            let content = std::fs::read_to_string(&src.dailfile_path)
+                .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
+            let ctx = src.context_dir.clone();
+            _git_source = Some(src);
+            (content, ctx)
+        } else {
+            tracing::info!("Reading {}", dailfile_path);
+            let content = std::fs::read_to_string(dailfile_path)
+                .map_err(|_| anyhow::anyhow!("file not found: {dailfile_path}"))?;
+            let ctx = std::path::Path::new(dailfile_path.as_str())
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .canonicalize()
+                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            _git_source = None;
+            (content, ctx)
+        };
+
         tracing::info!("File read successfully ({} bytes)", content.len());
         let dailfile = Dailfile::parse(&content)?;
         tracing::info!("Parsed successfully");
-        let context_dir = std::path::Path::new(dailfile_path.as_str())
-            .parent()
-            .unwrap_or(std::path::Path::new("."))
-            .canonicalize()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
         tracing::info!("Context directory: {}", context_dir.display());
         tracing::info!("Starting BuildExecutor::build...");
         BuildExecutor::build(

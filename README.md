@@ -31,6 +31,79 @@ dail run postgres-jail --preset postgres
 dail run temp-jail --rm
 ```
 
+## `.dail` File Reference
+
+A `.dail` file describes how to build and run a jail — similar to a Dockerfile.
+
+```dockerfile
+# Base FreeBSD release
+FROM 15.0-RELEASE
+
+# Install packages
+RUN pkg install -y nginx
+
+# Copy config files from build context into the jail
+COPY nginx.conf /usr/local/etc/nginx/nginx.conf
+
+# Set environment variables (appended to /etc/profile)
+ENV APP_ENV=production
+
+# Jail parameters (FreeBSD jail.conf options)
+PARAM persist=true
+PARAM allow.raw_sockets=true
+
+# Mount host directories into the jail
+MOUNT /home/user/site:/usr/local/www
+MOUNT ro:/data:/mnt/data
+
+# Enable a service (creates user/group/dirs, adds to rc.conf)
+SERVICE nginx --no-user
+
+# Log file path (used by `dail logs`)
+LOG /var/log/nginx/access.log
+
+# Port forwarding (host_port:jail_port)
+EXPOSE 8080:80
+EXPOSE 443
+
+# Override default startup command
+CMD /usr/local/sbin/nginx -g "daemon off;"
+```
+
+| Directive | Syntax | Description |
+|-----------|--------|-------------|
+| `FROM` | `FROM <release>` | FreeBSD base release |
+| `RUN` | `RUN <command>` | Execute command during build |
+| `COPY` | `COPY <src> <dst>` | Copy files from build context into jail |
+| `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
+| `PARAM` | `PARAM <key>=<value>` | Set jail parameter |
+| `MOUNT` | `MOUNT [ro:]<src>:<dst>` | Mount host directory (optional `ro:` prefix) |
+| `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs |
+| `LOG` | `LOG <path>` | Log file for `dail logs` |
+| `EXPOSE` | `EXPOSE [host:]<port>` | Port forwarding (overridden by `-p`) |
+| `CMD` | `CMD <command>` | Startup command (overrides SERVICE default) |
+
+### Example: deploy your app
+
+```bash
+# 1. Create a .dail file in your project
+cat > myapp.dail <<'EOF'
+FROM 15.0-RELEASE
+RUN pkg install -y go
+COPY . /opt/myapp
+RUN cd /opt/myapp && go build -o /usr/local/bin/myapp
+EXPOSE 8080
+CMD /usr/local/bin/myapp
+EOF
+
+# 2. Build and run
+dail run myapp --build myapp.dail
+
+# 3. Check logs and status
+dail logs myapp
+dail ls
+```
+
 ## Commands
 
 ### Setup
@@ -73,6 +146,8 @@ dail run web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
 dail run app --mount /data:/app --preset dev --limit maxproc=512
 dail run postgres-jail --build examples/postgres/postgres.dail # build + start
 dail run postgres-jail --build examples/postgres/postgres.dail --rebuild  # rebuild from scratch
+dail run https://github.com/user/repo.git pg                # build from git repo
+dail run https://github.com/user/repo//jails/web web        # build from subdirectory
 dail run pg --image postgres:18                             # run from saved image
 dail run pg --image postgres:18 --ip 10.100.0.50 --persist  # with overrides
 dail run web -p 8080:80                                     # port forwarding
@@ -166,12 +241,14 @@ dail top myjail --once              # single snapshot
 
 ### Build
 
-**`dail build`** — Build a jail from a `.dail` file.
+**`dail build`** — Build a jail from a `.dail` file or git URL.
 
 ```bash
 dail build pg.dail --name myapp
 dail build ./jails/web.dail --name web
 dail build examples/postgres/postgres.dail --name tmp --tag postgres:18  # build → save as image
+dail build https://github.com/user/repo.git --name app                  # build from git repo
+dail build https://github.com/user/repo//jails/web --name web           # build from subdirectory
 ```
 
 ### Cache
