@@ -45,7 +45,6 @@
 - [ ] IP allocation — `next_free_ip()` (pure logic)
 - [ ] Jail name validation — `validate_jail_name()` (pure logic)
 - [ ] Store round-trip — `DailStore` serialize/deserialize with tempdir
-- [ ] Image manifest — `ImageManifest` serde round-trip
 - [ ] Preset loading — `Preset::load` / `builtin()`
 - [ ] Config loading — `GlobalConfig` YAML/TOML fallback
 
@@ -60,10 +59,6 @@
 
 ## Future
 
-### Image management
-
-- [ ] Image deduplication — shared base layers via ZFS clones
-
 ### Other ideas
 
 - [ ] `dail cp <jail>:<path> <local>` — copy files from/to jail
@@ -71,5 +66,4 @@
 - [ ] Volumes — named persistent storage
 - [ ] `dail kill` — force-stop without removal
 - [ ] `dail stats` — resource usage via rctl
-- [ ] Image size in `dail image ls`
 - [ ] logs: kqueue instead of busy-wait polling

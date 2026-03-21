@@ -3,7 +3,7 @@ mod commands;
 mod completions;
 mod error;
 mod freebsd;
-mod image;
+
 mod jail;
 mod network;
 mod output;
@@ -67,13 +67,6 @@ enum Commands {
         #[command(subcommand)]
         action: CacheAction,
     },
-    /// Manage images
-    Image {
-        #[command(subcommand)]
-        action: commands::image::ImageAction,
-    },
-    /// List local images (alias for `image ls`)
-    Images,
     /// Generate shell completions
     #[command(after_long_help = "\
 Dynamic completions (add to shell rc, enables live jail name completion):
@@ -139,10 +132,6 @@ fn main() -> anyhow::Result<()> {
             | Commands::Ls(..)
             | Commands::Inspect(..)
             | Commands::Logs(..)
-            | Commands::Images
-            | Commands::Image {
-                action: commands::image::ImageAction::Ls { .. }
-            }
             | Commands::Config {
                 action: ConfigAction::Show
             }
@@ -182,10 +171,6 @@ fn main() -> anyhow::Result<()> {
         Commands::Cache { action } => match action {
             CacheAction::Clean => commands::cache::clean()?,
         },
-        Commands::Image { action } => commands::image::run(action)?,
-        Commands::Images => {
-            commands::image::run(commands::image::ImageAction::Ls { quiet: false })?
-        }
         Commands::Completions { shell: Some(shell) } => {
             clap_complete::generate(shell, &mut Cli::command(), "dail", &mut std::io::stdout());
         }

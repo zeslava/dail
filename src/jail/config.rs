@@ -105,10 +105,6 @@ impl GlobalConfig {
         self.cache_dir().join("pkg_repos")
     }
 
-    pub fn images_dir(&self) -> PathBuf {
-        self.root_dir.join("images")
-    }
-
     pub fn load() -> Result<Self, DailError> {
         let dir = default_config_dir();
         let yaml_path = dir.join("config.yaml");
@@ -269,8 +265,6 @@ pub struct JailConfig {
     pub cmd: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_file: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub image_ref: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ports: Vec<PortMapping>,
 }
@@ -290,7 +284,6 @@ impl JailConfig {
             auto_remove: false,
             cmd: None,
             log_file: None,
-            image_ref: None,
             ports: Vec::new(),
         }
     }

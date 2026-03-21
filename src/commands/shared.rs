@@ -30,7 +30,6 @@ pub struct ConfigFlags {
     pub auto_remove: bool,
     pub cmd: Option<String>,
     pub log_file: Option<String>,
-    pub image_ref: Option<String>,
 }
 
 /// Information about resources allocated during jail config building
@@ -242,7 +241,6 @@ pub fn build_jail_config(
         auto_remove: flags.auto_remove,
         cmd: flags.cmd,
         log_file: flags.log_file,
-        image_ref: flags.image_ref,
         ports,
     };
 

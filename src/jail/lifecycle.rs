@@ -1,7 +1,6 @@
 use crate::error::DailError;
 use crate::freebsd::jail_sys::{JailParams, JailSys};
 use crate::freebsd::mount::NullfsMount;
-use crate::image::{ImageRef, ImageStore};
 use crate::jail::config::{GlobalConfig, JailConfig, JailType};
 use crate::jail::state::{JailState, JailStatus};
 use crate::network::{self, NetworkConfig};
@@ -76,22 +75,6 @@ impl JailLifecycle {
         Ok(state)
     }
 
-    pub fn create_from_image(
-        &mut self,
-        jail_config: JailConfig,
-        root_path: std::path::PathBuf,
-    ) -> Result<JailState, DailError> {
-        validate_jail_name(&jail_config.name)?;
-
-        if self.store.get(&jail_config.name).is_some() {
-            return Err(DailError::JailAlreadyExists(jail_config.name.clone()));
-        }
-
-        let state = JailState::new(jail_config, root_path);
-        self.store.add(state.clone())?;
-        Ok(state)
-    }
-
     pub fn start(&mut self, name: &str) -> Result<&JailState, DailError> {
         let state = self
             .store
@@ -152,17 +135,12 @@ impl JailLifecycle {
     fn start_inner(&self, state: &JailState) -> Result<(i32, Option<String>), DailError> {
         // 1. Mount thin jail base + skeleton if applicable
         if state.config.jail_type == JailType::Thin {
-            let base_dir = if let Some(ref image_ref_str) = state.config.image_ref {
-                let image_ref = ImageRef::parse(image_ref_str)
-                    .map_err(|e| DailError::Config(format!("invalid image ref: {}", e)))?;
-                let image_store = ImageStore::new(&self.config);
-                image_store.ensure_rootfs(&image_ref.name, &image_ref.tag)?
-            } else if let Some(ref release) = state.config.base {
+            let base_dir = if let Some(ref release) = state.config.base {
                 let backend = storage::get_backend(&self.config);
                 backend.check_base(&self.config, release)?
             } else {
                 return Err(DailError::Config(
-                    "thin jail requires a base release or image. Run 'dail bootstrap <release>' first, or use --type thick".to_string(),
+                    "thin jail requires a base release. Run 'dail bootstrap <release>' first, or use --type thick".to_string(),
                 ));
             };
 

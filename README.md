@@ -136,7 +136,7 @@ dail create app --mount /data/app:/app --allow raw_sockets --limit maxproc=256
 dail create web -p 8080:80                                  # port forwarding via PF
 ```
 
-**`dail run`** — Create and start a jail in one step. Same options as `create`, plus `--rm`, `--build`, `--rebuild`, `--image`.
+**`dail run`** — Create and start a jail in one step. Same options as `create`, plus `--rm`, `--build`, `--rebuild`.
 
 ```bash
 dail run myjail                                             # create + start
@@ -148,8 +148,6 @@ dail run postgres-jail --build examples/postgres/postgres.dail # build + start
 dail run postgres-jail --build examples/postgres/postgres.dail --rebuild  # rebuild from scratch
 dail run https://github.com/user/repo.git pg                # build from git repo
 dail run https://github.com/user/repo//jails/web web        # build from subdirectory
-dail run pg --image postgres:18                             # run from saved image
-dail run pg --image postgres:18 --ip 10.100.0.50 --persist  # with overrides
 dail run web -p 8080:80                                     # port forwarding
 dail run web -p 8080:80/tcp -p 5432:5432                    # multiple ports
 ```
@@ -246,7 +244,6 @@ dail top myjail --once              # single snapshot
 ```bash
 dail build pg.dail --name myapp
 dail build ./jails/web.dail --name web
-dail build examples/postgres/postgres.dail --name tmp --tag postgres:18  # build → save as image
 dail build https://github.com/user/repo.git --name app                  # build from git repo
 dail build https://github.com/user/repo//jails/web --name web           # build from subdirectory
 ```
@@ -259,44 +256,9 @@ dail build https://github.com/user/repo//jails/web --name web           # build 
 dail cache clean
 ```
 
-### Images
-
-**`dail image save`** — Export a jail as a portable tar.zst archive.
-
-```bash
-dail image save myjail                      # tag: latest
-dail image save myjail -t v1.0
-dail image save myjail -t v1.0 -o /tmp/myjail.tar.zst
-```
-
-**`dail image load`** — Import an image from archive.
-
-```bash
-dail image load myjail-v1.0.tar.zst
-```
-
-**`dail image ls`** / **`dail images`** — List local images.
-
-```bash
-dail images
-dail images -q                      # name:tag only (for scripting)
-```
-
-**`dail image inspect`** — Show image manifest details.
-
-```bash
-dail image inspect postgres:18
-```
-
-**`dail image rm`** — Remove a local image.
-
-```bash
-dail image rm myjail:v1.0
-```
-
 ### Shell Completions
 
-Dail supports dynamic completions — jail names, image refs and other values are completed at runtime.
+Dail supports dynamic completions — jail names and other values are completed at runtime.
 
 ```bash
 # Dynamic completions (recommended — live jail name and image completion)

@@ -7,8 +7,7 @@ use crate::build::executor::BuildExecutor;
 use crate::build::git;
 use crate::commands::shared::{self, CommonJailArgs, ConfigFlags};
 use crate::completions;
-use crate::image::{ImageRef, ImageStore};
-use crate::jail::config::{GlobalConfig, JailType};
+use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
 
 #[derive(Args)]
@@ -102,10 +101,6 @@ pub struct RunArgs {
     #[arg(long)]
     pub rebuild: bool,
 
-    /// Run from a saved image (name:tag)
-    #[arg(long, conflicts_with_all = ["build", "base"], add = ArgValueCompleter::new(completions::complete_image_refs))]
-    pub image: Option<String>,
-
     /// Publish port: [host_ip:]host_port:jail_port[/proto]
     #[arg(short = 'p', long = "publish")]
     pub publish: Vec<String>,
@@ -176,78 +171,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
 
     let (config, info) = shared::build_jail_config(jail_name.clone(), &common, &global, flags)?;
 
-    if let Some(ref image_ref_str) = args.image {
-        // --image mode: extract image into jail root
-        let image_ref = ImageRef::parse(image_ref_str)?;
-        let img_name = &image_ref.name;
-        let img_tag = &image_ref.tag;
-
-        let image_store = ImageStore::new(&global);
-        let manifest = image_store.load_manifest(img_name, img_tag)?;
-
-        // Apply manifest config as base, CLI args override
-        let mut config = config;
-        for (k, v) in &manifest.params {
-            config.params.entry(k.clone()).or_insert_with(|| v.clone());
-        }
-        for (k, v) in &manifest.limits {
-            config.limits.entry(k.clone()).or_insert_with(|| v.clone());
-        }
-        if manifest.persist && !config.persist {
-            config.persist = true;
-        }
-        if config.cmd.is_none() {
-            config.cmd = manifest.cmd.clone();
-        }
-        config.base = manifest.base.clone();
-
-        let jail_dir = global.jails_dir().join(&jail_name);
-        let root_path = jail_dir.join("root");
-
-        if config.jail_type == JailType::Thin {
-            // Thin: shared rootfs + per-jail skeleton
-            let rootfs = image_store.ensure_rootfs(img_name, img_tag)?;
-            config.image_ref = Some(format!("{img_name}:{img_tag}"));
-            std::fs::create_dir_all(&root_path)?;
-            let skeleton_dir = jail_dir.join("skeleton");
-            std::fs::create_dir_all(&skeleton_dir)?;
-            for dir in &["etc", "var", "tmp", "root"] {
-                let src = rootfs.join(dir);
-                let dst = skeleton_dir.join(dir);
-                if src.exists() {
-                    // Copy writable dirs from rootfs into skeleton
-                    let output = std::process::Command::new("cp")
-                        .args(["-a"])
-                        .arg(&src)
-                        .arg(&skeleton_dir)
-                        .output()
-                        .map_err(|e| anyhow::anyhow!("cp failed: {e}"))?;
-                    if !output.status.success() {
-                        let stderr = String::from_utf8_lossy(&output.stderr);
-                        anyhow::bail!("failed to copy {} to skeleton: {}", dir, stderr);
-                    }
-                } else {
-                    std::fs::create_dir_all(&dst)?;
-                }
-            }
-        } else {
-            // Thick: full copy into jail root
-            image_store.extract(img_name, img_tag, &root_path)?;
-        }
-
-        let state = lifecycle.create_from_image(config, root_path)?;
-        println!(
-            "Jail '{}' created from image {}:{} (id: {})",
-            state.name(),
-            img_name,
-            img_tag,
-            &state.id[..8]
-        );
-
-        if let Some(ip) = info.allocated_ip {
-            println!("IP allocated: {} on {}", ip, global.alias_interface);
-        }
-    } else if let Some(ref dailfile_path) = args.build {
+    if let Some(ref dailfile_path) = args.build {
         // --build mode: ignore create args, use .dail file
         if let Some(existing) = lifecycle.get(&jail_name) {
             if args.rebuild {

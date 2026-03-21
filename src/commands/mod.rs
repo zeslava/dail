@@ -7,7 +7,7 @@ pub mod config_show;
 pub mod console;
 pub mod create;
 pub mod exec;
-pub mod image;
+
 pub mod inspect;
 pub mod logs;
 pub mod ls;

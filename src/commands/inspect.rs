@@ -59,9 +59,6 @@ pub fn run(args: InspectArgs) -> anyhow::Result<()> {
         NetworkConfig::None => println!("Network:     none"),
     }
 
-    if let Some(ref image_ref) = c.image_ref {
-        println!("Image:       {image_ref}");
-    }
     if let Some(ref cmd) = c.cmd {
         println!("CMD:         {cmd}");
     }
