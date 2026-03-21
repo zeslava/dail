@@ -2,8 +2,6 @@
 pub enum ZfsError {
     #[error("zfs command failed: {0}")]
     CommandFailed(String),
-    #[error("dataset not found: {0}")]
-    NotFound(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),
 }
@@ -60,21 +58,6 @@ impl Zfs {
         Ok(output.status.success())
     }
 
-    /// List snapshots of a dataset.
-    pub fn list_snapshots(dataset: &str) -> Result<Vec<String>, ZfsError> {
-        let output = std::process::Command::new("zfs")
-            .args(["list", "-H", "-t", "snapshot", "-o", "name", "-r", dataset])
-            .output()?;
-
-        if !output.status.success() {
-            return Err(ZfsError::CommandFailed(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
-    }
 }
 
 fn run_zfs(args: &[&str]) -> Result<(), ZfsError> {

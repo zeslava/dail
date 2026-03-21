@@ -66,11 +66,6 @@ impl Ifconfig {
         run_ifconfig(&[bridge, "addm", member])
     }
 
-    /// Remove an interface from a bridge.
-    pub fn bridge_remove(bridge: &str, member: &str) -> Result<(), IfconfigError> {
-        run_ifconfig(&[bridge, "deletem", member])
-    }
-
     /// Bring an interface up.
     pub fn up(interface: &str) -> Result<(), IfconfigError> {
         run_ifconfig(&[interface, "up"])

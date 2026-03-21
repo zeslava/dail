@@ -42,20 +42,4 @@ impl Rctl {
         Ok(())
     }
 
-    /// List limits for a jail.
-    pub fn list_limits(jail_name: &str) -> Result<Vec<String>, RctlError> {
-        let filter = format!("jail:{jail_name}");
-        let output = std::process::Command::new("rctl")
-            .args(["-l", &filter])
-            .output()?;
-
-        if !output.status.success() {
-            return Err(RctlError::CommandFailed(
-                String::from_utf8_lossy(&output.stderr).to_string(),
-            ));
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(stdout.lines().map(|l| l.trim().to_string()).filter(|l| !l.is_empty()).collect())
-    }
 }

@@ -30,10 +30,10 @@
 
 - [x] **Extract shared builder** — deduplicate ~100 lines between `create.rs` and `run.rs`
 - [ ] **Remove dead code** — audit `#[allow(dead_code)]` in `src/freebsd/mod.rs`
-- [ ] **Add unit tests** — .dail parser, `next_free_ip()`, `validate_jail_name()`, `ImageRef::parse()`, store serde round-trip
+- [ ] **Add unit tests** — .dail parser, `next_free_ip()`, `validate_jail_name()`, store serde round-trip
 - [ ] **Extract IP allocation** — deduplicate between `shared.rs` and `clone.rs` into a reusable helper
 - [ ] **Protect build against crash-state** — build executor mutates persisted state for temporary needs; use separate build config or `building` flag
-- [ ] **Split `run.rs`** — extract image-mode and build-mode into separate functions/modules
+- [ ] **Split `run.rs`** — extract build-mode into separate function/module
 - [x] **Git URL support in `build` and `run`** — clone git repo, find .dail file, build+run; supports `//subdir` for nested projects
 - [x] **`dail top`** — show running processes inside a jail (jexec ps wrapper)
 - [x] **Image ref parsing** — extract helper, used in 4+ places
@@ -52,7 +52,7 @@
 
 - [ ] Man page (`dail.1`)
 - [x] Document `--mount-ro` and `--network` flags in README
-- [ ] Document COPY host-path behavior in .dail file reference
+- [x] Document COPY host-path behavior in .dail file reference
 - [ ] Submit port to FreeBSD ports tree
 
 ---
