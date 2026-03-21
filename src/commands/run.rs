@@ -120,16 +120,15 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     };
 
     fn looks_like_dail_source(s: &str) -> bool {
-        s.ends_with(".dail") || git::is_git_url(s)
+        s.ends_with(".dail") || git::is_git_url(s) || git::is_remote_url(s)
     }
 
-    // For git URLs, clone early so we can derive jail name from the .dail file or repo name
-    let mut _early_git_source;
+    // For remote sources, clone/fetch early so we can derive jail name
+    let mut _early_git_source = None;
     let jail_name;
     if args.build.is_none() && looks_like_dail_source(&first) {
-        if let Some(name) = args.name {
-            jail_name = name;
-            _early_git_source = None;
+        jail_name = if let Some(name) = args.name {
+            name
         } else if git::is_git_url(&first) {
             let src = git::clone_and_resolve(&first)?;
             let name = src.dailfile_path
@@ -137,20 +136,19 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_string())
                 .unwrap_or_else(|| src.repo_name.clone());
-            jail_name = name;
             _early_git_source = Some(src);
+            name
         } else {
-            jail_name = std::path::Path::new(&first)
+            // Local .dail file or HTTP .dail URL — derive from filename
+            std::path::Path::new(&first)
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("dail-build-{}", &Uuid::new_v4().to_string()[..8]));
-            _early_git_source = None;
-        }
+                .unwrap_or_else(|| format!("dail-build-{}", &Uuid::new_v4().to_string()[..8]))
+        };
         args.build = Some(first);
     } else {
         jail_name = args.name.unwrap_or(first);
-        _early_git_source = None;
     }
 
     let common = CommonJailArgs {
@@ -195,13 +193,13 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
-        // Resolve source: reuse early git clone, or clone now, or read local path
-        let _git_source;
+        // Resolve source: reuse early git clone, clone now, fetch HTTP, or read local
+        let _remote_source: Option<Box<dyn std::any::Any>>;
         let (content, context_dir) = if let Some(src) = _early_git_source.take() {
             let content = std::fs::read_to_string(&src.dailfile_path)
                 .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
             let ctx = src.context_dir.clone();
-            _git_source = Some(src);
+            _remote_source = Some(Box::new(src));
             (content, ctx)
         } else if git::is_git_url(dailfile_path) {
             tracing::info!("Cloning git repository: {}", dailfile_path);
@@ -209,7 +207,15 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             let content = std::fs::read_to_string(&src.dailfile_path)
                 .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
             let ctx = src.context_dir.clone();
-            _git_source = Some(src);
+            _remote_source = Some(Box::new(src));
+            (content, ctx)
+        } else if git::is_remote_url(dailfile_path) {
+            tracing::info!("Fetching {}", dailfile_path);
+            let fetched = git::fetch_dail_file(dailfile_path)?;
+            let content = std::fs::read_to_string(&fetched.dailfile_path)
+                .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
+            let ctx = fetched.dailfile_path.parent().unwrap().to_path_buf();
+            _remote_source = Some(Box::new(fetched));
             (content, ctx)
         } else {
             tracing::info!("Reading {}", dailfile_path);
@@ -220,7 +226,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 .unwrap_or(std::path::Path::new("."))
                 .canonicalize()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            _git_source = None;
+            _remote_source = None;
             (content, ctx)
         };
 

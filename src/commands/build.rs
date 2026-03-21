@@ -11,9 +11,9 @@ Examples:
   dail build pg.dail --name myapp             Build from .dail file
   dail build ./jails/web.dail --name web      Build from custom path
   dail build https://github.com/user/repo.git --name app   Build from git repo
-  dail build https://github.com/user/repo//jails/web --name web   Build from subdirectory")]
+  dail build https://example.com/myapp.dail --name app     Build from remote .dail file")]
 pub struct BuildArgs {
-    /// Path to .dail file or git URL
+    /// Path to .dail file, git URL, or HTTP URL
     pub dailfile: String,
     /// Jail name
     #[arg(long)]
@@ -24,14 +24,21 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global)?;
 
-    // Resolve source: git URL or local path
-    let _git_source; // hold tempdir alive
+    // Resolve source: git repo, HTTP .dail file, or local path
+    let _remote_source: Option<Box<dyn std::any::Any>>;
     let (content, context_dir) = if git::is_git_url(&args.dailfile) {
         let src = git::clone_and_resolve(&args.dailfile)?;
         let content = std::fs::read_to_string(&src.dailfile_path)
             .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
         let ctx = src.context_dir.clone();
-        _git_source = Some(src);
+        _remote_source = Some(Box::new(src));
+        (content, ctx)
+    } else if git::is_remote_url(&args.dailfile) {
+        let fetched = git::fetch_dail_file(&args.dailfile)?;
+        let content = std::fs::read_to_string(&fetched.dailfile_path)
+            .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
+        let ctx = fetched.dailfile_path.parent().unwrap().to_path_buf();
+        _remote_source = Some(Box::new(fetched));
         (content, ctx)
     } else {
         let content = std::fs::read_to_string(&args.dailfile)
@@ -41,7 +48,7 @@ pub fn run(args: BuildArgs) -> anyhow::Result<()> {
             .unwrap_or(std::path::Path::new("."))
             .canonicalize()
             .unwrap_or_else(|_| std::path::PathBuf::from("."));
-        _git_source = None;
+        _remote_source = None;
         (content, ctx)
     };
 
