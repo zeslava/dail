@@ -16,18 +16,19 @@ Examples:
   dail run pg                                               Create and start with defaults
   dail run pg --preset postgres                             Apply postgres preset
   dail run pg --rm                                          Auto-remove on stop
-  dail run ./examples/postgres/pg.dail pg                   Build .dail file, name jail 'pg'
-  dail run ./examples/postgres/pg.dail                      Build with auto-generated name
-  dail run ./examples/postgres/pg.dail pg --rebuild         Rebuild from scratch
-  dail run https://github.com/user/repo.git pg              Build from git repo
-  dail run https://github.com/user/repo//jails/web pg       Build from subdirectory")]
+  dail run myservice.dail                                   Build .dail file, name from filename
+  dail run myservice.dail --name pg                         Build with explicit name
+  dail run myservice.dail --rebuild                         Rebuild from scratch
+  dail run https://github.com/user/repo.git --name app      Build from git repo
+  dail run https://github.com/user/repo//jails/web --name web  Build from subdirectory")]
 pub struct RunArgs {
     /// Jail name, .dail file path, or git URL
     #[arg(add = ArgValueCompleter::new(completions::complete_run_first))]
     pub first: Option<String>,
 
-    /// Jail name (when first argument is a .dail file path)
-    pub second: Option<String>,
+    /// Jail name (overrides name derived from .dail filename)
+    #[arg(long)]
+    pub name: Option<String>,
 
     /// FreeBSD base release (e.g. 14.0-RELEASE)
     #[arg(long, add = ArgValueCompleter::new(completions::complete_base_releases))]
@@ -111,38 +112,45 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
     let mut lifecycle = JailLifecycle::new(global.clone())?;
 
-    // Resolve first/second positional args into (jail_name, optional dailfile_path)
     let first = match args.first {
         Some(f) => f,
         None => {
-            anyhow::bail!(
-                "Missing argument.\nUsage: dail run <name> or dail run <file.dail> [name]"
-            );
+            anyhow::bail!("Missing argument.\nUsage: dail run <name> or dail run <file.dail>");
         }
     };
 
-    fn looks_like_dail_file(s: &str) -> bool {
-        s.ends_with(".dail") || s.contains('/') || git::is_git_url(s)
+    fn looks_like_dail_source(s: &str) -> bool {
+        s.ends_with(".dail") || git::is_git_url(s)
     }
 
+    // For git URLs, clone early so we can derive jail name from the .dail file or repo name
+    let mut _early_git_source;
     let jail_name;
-    if args.build.is_none() && looks_like_dail_file(&first) {
-        // first arg is a .dail file path, second (if any) is the jail name
-        jail_name = args.second.unwrap_or_else(|| {
-            // Derive name from filename: "myservice.dail" → "myservice"
-            std::path::Path::new(&first)
+    if args.build.is_none() && looks_like_dail_source(&first) {
+        if let Some(name) = args.name {
+            jail_name = name;
+            _early_git_source = None;
+        } else if git::is_git_url(&first) {
+            let src = git::clone_and_resolve(&first)?;
+            let name = src.dailfile_path
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .map(|s| s.to_string())
-                .unwrap_or_else(|| format!("dail-build-{}", &Uuid::new_v4().to_string()[..8]))
-        });
+                .unwrap_or_else(|| src.repo_name.clone());
+            jail_name = name;
+            _early_git_source = Some(src);
+        } else {
+            jail_name = std::path::Path::new(&first)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("dail-build-{}", &Uuid::new_v4().to_string()[..8]));
+            _early_git_source = None;
+        }
         args.build = Some(first);
     } else {
-        // first arg is the jail name
-        if args.second.is_some() {
-            anyhow::bail!("unexpected second argument. Did you mean: dail run <file.dail> <name>?");
-        }
-        jail_name = first;
+        jail_name = args.name.unwrap_or(first);
+        _early_git_source = None;
     }
 
     let common = CommonJailArgs {
@@ -187,9 +195,15 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
-        // Resolve source: git URL or local path
+        // Resolve source: reuse early git clone, or clone now, or read local path
         let _git_source;
-        let (content, context_dir) = if git::is_git_url(dailfile_path) {
+        let (content, context_dir) = if let Some(src) = _early_git_source.take() {
+            let content = std::fs::read_to_string(&src.dailfile_path)
+                .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
+            let ctx = src.context_dir.clone();
+            _git_source = Some(src);
+            (content, ctx)
+        } else if git::is_git_url(dailfile_path) {
             tracing::info!("Cloning git repository: {}", dailfile_path);
             let src = git::clone_and_resolve(dailfile_path)?;
             let content = std::fs::read_to_string(&src.dailfile_path)

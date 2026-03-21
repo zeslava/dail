@@ -144,10 +144,11 @@ dail run postgres-jail --preset postgres                    # with preset
 dail run temp --rm                                          # auto-remove on stop
 dail run web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
 dail run app --mount /data:/app --preset dev --limit maxproc=512
-dail run postgres-jail --build examples/postgres/postgres.dail # build + start
-dail run postgres-jail --build examples/postgres/postgres.dail --rebuild  # rebuild from scratch
-dail run https://github.com/user/repo.git pg                # build from git repo
-dail run https://github.com/user/repo//jails/web web        # build from subdirectory
+dail run postgres.dail                                      # build + start, name from filename
+dail run postgres.dail --name pg                            # build with explicit name
+dail run postgres.dail --rebuild                            # rebuild from scratch
+dail run https://github.com/user/repo.git --name app        # build from git repo
+dail run https://github.com/user/repo//jails/web --name web # build from subdirectory
 dail run web -p 8080:80                                     # port forwarding
 dail run web -p 8080:80/tcp -p 5432:5432                    # multiple ports
 ```

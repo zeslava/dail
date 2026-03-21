@@ -25,6 +25,8 @@ pub struct GitSource {
     pub dailfile_path: PathBuf,
     /// Absolute path to the context directory (clone root or subdirectory).
     pub context_dir: PathBuf,
+    /// Repository name extracted from the URL (e.g. "myapp" from "github.com/user/myapp.git").
+    pub repo_name: String,
 }
 
 /// Clone a git URL and locate the `.dail` file inside.
@@ -88,11 +90,24 @@ pub fn clone_and_resolve(url: &str) -> anyhow::Result<GitSource> {
         .unwrap_or(&search_dir)
         .to_path_buf();
 
+    let repo_name = extract_repo_name(&repo_url);
+
     Ok(GitSource {
         _tempdir: tempdir,
         dailfile_path,
         context_dir,
+        repo_name,
     })
+}
+
+/// Extract repository name from a URL.
+/// e.g. "https://github.com/user/myapp.git" → "myapp"
+fn extract_repo_name(url: &str) -> String {
+    url.rsplit('/')
+        .next()
+        .unwrap_or("repo")
+        .trim_end_matches(".git")
+        .to_string()
 }
 
 /// Split `url//subdir` into `(url, Some(subdir))`.
