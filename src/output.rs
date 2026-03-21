@@ -71,6 +71,19 @@ impl Table {
     }
 }
 
+fn format_duration(d: chrono::Duration) -> String {
+    let secs = d.num_seconds();
+    if secs < 60 {
+        format!("{secs}s")
+    } else if secs < 3600 {
+        format!("{}m {}s", secs / 60, secs % 60)
+    } else if secs < 86400 {
+        format!("{}h {}m", secs / 3600, (secs % 3600) / 60)
+    } else {
+        format!("{}d {}h", secs / 86400, (secs % 86400) / 3600)
+    }
+}
+
 fn strip_ansi(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
     let mut in_escape = false;
@@ -94,12 +107,19 @@ pub fn print_table(jails: &[&JailState]) {
         return;
     }
 
-    let mut table = Table::new(vec!["NAME", "STATUS", "JID", "IP", "PORTS", "BASE", "TYPE", "CREATED"]);
+    let mut table = Table::new(vec!["NAME", "STATUS", "JID", "IP", "PORTS", "BASE", "TYPE", "UPTIME"]);
 
     for jail in jails {
         let jid = jail.jid.map(|j| j.to_string()).unwrap_or_else(|| "-".to_string());
         let base = jail.config.base.as_deref().unwrap_or("-").to_string();
-        let created = jail.created_at.format("%Y-%m-%d %H:%M:%S").to_string();
+        let uptime = match jail.status {
+            JailStatus::Running | JailStatus::Idle => {
+                jail.started_at
+                    .map(|t| format_duration(chrono::Utc::now() - t))
+                    .unwrap_or_else(|| "-".to_string())
+            }
+            _ => "-".to_string(),
+        };
         let jail_type = format!("{:?}", jail.config.jail_type).to_lowercase();
         let ip = match &jail.config.network {
             NetworkConfig::Alias { ip, .. } => ip.clone(),
@@ -125,7 +145,7 @@ pub fn print_table(jails: &[&JailState]) {
             ports,
             base,
             jail_type,
-            created,
+            uptime,
         ]);
     }
 
