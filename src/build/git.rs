@@ -2,23 +2,19 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context};
 
-/// Checks whether the string is a remote URL (git repo or direct file link).
-pub fn is_remote_url(s: &str) -> bool {
+/// Checks whether the string looks like a git URL.
+///
+/// Recognized forms:
+/// - `https://...` / `http://...`
+/// - `git://...`
+/// - `git@host:path`
+/// - any URL ending with `.git`
+pub fn is_git_url(s: &str) -> bool {
     s.starts_with("https://")
         || s.starts_with("http://")
         || s.starts_with("git://")
         || s.starts_with("git@")
         || s.ends_with(".git")
-}
-
-/// Checks whether the string looks like a git repo URL (not a direct file link).
-pub fn is_git_url(s: &str) -> bool {
-    if s.starts_with("git://") || s.starts_with("git@") || s.ends_with(".git") {
-        return true;
-    }
-    // https/http URLs that end with .dail are direct file downloads, not git repos
-    (s.starts_with("https://") || s.starts_with("http://"))
-        && !s.ends_with(".dail")
 }
 
 /// Result of resolving a git URL: holds the tempdir (for lifetime) and paths.
@@ -139,45 +135,6 @@ fn split_subdir(url: &str) -> (String, Option<String>) {
     } else {
         (url.to_string(), None)
     }
-}
-
-/// Result of fetching a remote .dail file.
-pub struct FetchedDailFile {
-    pub _tempdir: tempfile::TempDir,
-    pub dailfile_path: PathBuf,
-}
-
-/// Fetch a single .dail file from an HTTP(S) URL.
-pub fn fetch_dail_file(url: &str) -> anyhow::Result<FetchedDailFile> {
-    let filename = url.rsplit('/').next().unwrap_or("remote.dail");
-
-    let tempdir = tempfile::tempdir().context("failed to create temp directory")?;
-    let dest = tempdir.path().join(filename);
-
-    let output = std::process::Command::new("fetch")
-        .args(["-q", "-o"])
-        .arg(&dest)
-        .arg(url)
-        .output()
-        .or_else(|_| {
-            // fallback to curl if fetch is not available (non-FreeBSD)
-            std::process::Command::new("curl")
-                .args(["-sSfL", "-o"])
-                .arg(&dest)
-                .arg(url)
-                .output()
-        })
-        .context("failed to download file — is fetch or curl installed?")?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("failed to download {url}: {stderr}");
-    }
-
-    Ok(FetchedDailFile {
-        _tempdir: tempdir,
-        dailfile_path: dest,
-    })
 }
 
 /// Find `.dail` files in the top level of `dir` (non-recursive).

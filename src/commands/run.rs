@@ -120,7 +120,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
     };
 
     fn looks_like_dail_source(s: &str) -> bool {
-        s.ends_with(".dail") || git::is_git_url(s) || git::is_remote_url(s)
+        s.ends_with(".dail") || git::is_git_url(s)
     }
 
     // For remote sources, clone/fetch early so we can derive jail name
@@ -193,13 +193,13 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 );
             }
         }
-        // Resolve source: reuse early git clone, clone now, fetch HTTP, or read local
-        let _remote_source: Option<Box<dyn std::any::Any>>;
+        // Resolve source: reuse early git clone, clone now, or read local
+        let _git_source;
         let (content, context_dir) = if let Some(src) = _early_git_source.take() {
             let content = std::fs::read_to_string(&src.dailfile_path)
                 .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
             let ctx = src.context_dir.clone();
-            _remote_source = Some(Box::new(src));
+            _git_source = Some(src);
             (content, ctx)
         } else if git::is_git_url(dailfile_path) {
             tracing::info!("Cloning git repository: {}", dailfile_path);
@@ -207,15 +207,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             let content = std::fs::read_to_string(&src.dailfile_path)
                 .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
             let ctx = src.context_dir.clone();
-            _remote_source = Some(Box::new(src));
-            (content, ctx)
-        } else if git::is_remote_url(dailfile_path) {
-            tracing::info!("Fetching {}", dailfile_path);
-            let fetched = git::fetch_dail_file(dailfile_path)?;
-            let content = std::fs::read_to_string(&fetched.dailfile_path)
-                .map_err(|e| anyhow::anyhow!("failed to read .dail file: {e}"))?;
-            let ctx = fetched.dailfile_path.parent().unwrap().to_path_buf();
-            _remote_source = Some(Box::new(fetched));
+            _git_source = Some(src);
             (content, ctx)
         } else {
             tracing::info!("Reading {}", dailfile_path);
@@ -226,7 +218,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
                 .unwrap_or(std::path::Path::new("."))
                 .canonicalize()
                 .unwrap_or_else(|_| std::path::PathBuf::from("."));
-            _remote_source = None;
+            _git_source = None;
             (content, ctx)
         };
 

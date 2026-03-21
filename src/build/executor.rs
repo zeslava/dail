@@ -190,6 +190,12 @@ impl BuildExecutor {
                                 src_raw.to_path_buf()
                             };
                             let src = src.as_path();
+                            if !src.exists() {
+                                return Err(DailError::Build(format!(
+                                    "COPY failed: source not found: {}",
+                                    src.display()
+                                )));
+                            }
                             if src.is_dir() {
                                 let status = std::process::Command::new("cp")
                                     .arg("-a")
