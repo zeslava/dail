@@ -92,7 +92,6 @@ impl BuildExecutor {
             jail_config.ports.extend(cli.ports.iter().cloned());
         }
 
-        let jail_config_final = jail_config.clone();
         tracing::info!(
             "Jail config prepared: base={:?}, type=thick, persist={}",
             jail_config.base,
@@ -107,15 +106,8 @@ impl BuildExecutor {
             .iter()
             .any(|i| matches!(i, Instruction::Run { .. } | Instruction::Copy { .. }));
         if has_run_or_copy {
-            // During build: persist=true to stay alive between RUN steps,
-            // inherit network for pkg access, no CMD yet
-            lifecycle.store_update(name, |s| {
-                s.config.persist = true;
-                s.config.network = crate::network::NetworkConfig::Inherit;
-                s.config.cmd = None;
-            })?;
             tracing::info!("Starting jail '{}' for build", name);
-            match lifecycle.start(name) {
+            match lifecycle.start_for_build(name) {
                 Ok(_) => {
                     tracing::info!("Jail '{}' started", name);
                 }
@@ -284,15 +276,7 @@ impl BuildExecutor {
             // Propagate any build error after cleanup
             exec_result?;
 
-            // Restore final config: original params, cmd, network
             tracing::info!("Build completed for jail '{}'", name);
-            lifecycle.store_update(name, |s| {
-                s.config.persist = jail_config_final.persist;
-                s.config.network = jail_config_final.network.clone();
-                s.config.cmd = jail_config_final.cmd.clone();
-                s.config.log_file = jail_config_final.log_file.clone();
-                s.config.ports = jail_config_final.ports.clone();
-            })?;
         }
 
         Ok(())

@@ -32,7 +32,7 @@
 - [ ] **Remove dead code** — audit `#[allow(dead_code)]` in `src/freebsd/mod.rs`
 - [ ] **Add unit tests** — .dail parser, `next_free_ip()`, `validate_jail_name()`, store serde round-trip
 - [ ] **Extract IP allocation** — deduplicate between `shared.rs` and `clone.rs` into a reusable helper
-- [ ] **Protect build against crash-state** — build executor mutates persisted state for temporary needs; use separate build config or `building` flag
+- [x] **Protect build against crash-state** — build uses in-memory overrides via `start_for_build`, persisted state never mutated
 - [ ] **Split `run.rs`** — extract build-mode into separate function/module
 - [x] **Git URL support in `build` and `run`** — clone git repo, find .dail file, build+run; supports `//subdir` for nested projects
 - [x] **`dail top`** — show running processes inside a jail (jexec ps wrapper)

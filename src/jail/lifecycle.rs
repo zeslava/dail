@@ -130,6 +130,36 @@ impl JailLifecycle {
         }
     }
 
+    /// Start a jail with temporary config overrides for the build phase.
+    /// The overrides are applied in-memory only — persisted state is never mutated.
+    pub fn start_for_build(&mut self, name: &str) -> Result<&JailState, DailError> {
+        let state = self
+            .store
+            .get(name)
+            .ok_or_else(|| DailError::JailNotFound(name.to_string()))?;
+
+        let mut build_state = state.clone();
+        build_state.config.persist = true;
+        build_state.config.network = crate::network::NetworkConfig::Inherit;
+        build_state.config.cmd = None;
+
+        match self.start_inner(&build_state) {
+            Ok((jid, epair)) => {
+                self.store.update(name, |s| {
+                    s.status = JailStatus::Running;
+                    s.jid = Some(jid);
+                    s.epair = epair;
+                    s.started_at = Some(chrono::Utc::now());
+                })?;
+                Ok(self.store.get(name).unwrap())
+            }
+            Err(e) => {
+                self.cleanup_failed_start(&build_state);
+                Err(e)
+            }
+        }
+    }
+
     /// Inner start logic that can fail at any point. On error, caller handles cleanup.
     /// Returns (jid, epair_name) where epair_name is set for Vnet jails.
     fn start_inner(&self, state: &JailState) -> Result<(i32, Option<String>), DailError> {
@@ -413,14 +443,6 @@ impl JailLifecycle {
 
     pub fn get(&self, name: &str) -> Option<&JailState> {
         self.store.get(name)
-    }
-
-    pub fn store_update(
-        &mut self,
-        name: &str,
-        f: impl FnOnce(&mut JailState),
-    ) -> Result<(), DailError> {
-        self.store.update(name, f)
     }
 
     pub fn exec(
