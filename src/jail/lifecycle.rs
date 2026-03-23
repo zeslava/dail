@@ -272,7 +272,12 @@ impl JailLifecycle {
 
         // 8. Run CMD if configured
         if let Some(ref cmd) = state.config.cmd {
-            let log_path = self.config.jails_dir().join(state.name()).join("cmd.log");
+            let log_path = if let Some(ref log_file) = state.config.log_file {
+                let rel = log_file.strip_prefix('/').unwrap_or(log_file);
+                state.root_path.join(rel)
+            } else {
+                self.config.jails_dir().join(state.name()).join("cmd.log")
+            };
             JailSys::exec_logged(&state.config.name, cmd, &log_path)?;
         }
 
