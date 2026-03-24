@@ -16,8 +16,9 @@ impl BuildExecutor {
     ) -> Result<(), DailError> {
         tracing::info!("Building jail '{}'", name);
         let mut jail_config = JailConfig::new(name.to_string());
-        // Build always uses thick jail — we need a writable rootfs
-        jail_config.jail_type = crate::jail::config::JailType::Thick;
+        jail_config.jail_type = cli_config
+            .map(|c| c.jail_type.clone())
+            .unwrap_or(crate::jail::config::JailType::Thick);
 
         let has_cli_ports = cli_config.map_or(false, |c| !c.ports.is_empty());
 
