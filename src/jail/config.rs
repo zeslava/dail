@@ -42,7 +42,7 @@ fn default_config_dir() -> PathBuf {
 }
 
 fn default_storage_backend() -> String {
-    "directory".to_string()
+    "zfs".to_string()
 }
 
 fn default_alias_interface() -> String {

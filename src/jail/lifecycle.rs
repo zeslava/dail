@@ -164,7 +164,7 @@ impl JailLifecycle {
     /// Returns (jid, epair_name) where epair_name is set for Vnet jails.
     fn start_inner(&self, state: &JailState) -> Result<(i32, Option<String>), DailError> {
         // 1. Mount thin jail base + skeleton if applicable
-        if state.config.jail_type == JailType::Thin {
+        if state.config.jail_type == JailType::Thin && self.config.storage_backend != "zfs" {
             let base_dir = if let Some(ref release) = state.config.base {
                 let backend = storage::get_backend(&self.config);
                 backend.check_base(&self.config, release)?
@@ -309,8 +309,8 @@ impl JailLifecycle {
             }
         }
 
-        // Unmount thin jail skeleton + base
-        if state.config.jail_type == JailType::Thin {
+        // Unmount thin jail skeleton + base (directory backend only)
+        if state.config.jail_type == JailType::Thin && self.config.storage_backend != "zfs" {
             for dir in &["root", "tmp", "var", "etc"] {
                 let dst = state.root_path.join(dir);
                 if let Err(e) = NullfsMount::force_unmount(&dst) {
@@ -383,8 +383,8 @@ impl JailLifecycle {
             let _ = NullfsMount::force_unmount(&devfs);
         }
 
-        // Unmount thin jail skeleton + base
-        if jail_type == JailType::Thin {
+        // Unmount thin jail skeleton + base (directory backend only)
+        if jail_type == JailType::Thin && self.config.storage_backend != "zfs" {
             for dir in &["root", "tmp", "var", "etc"] {
                 let _ = NullfsMount::force_unmount(&root_path.join(dir));
             }

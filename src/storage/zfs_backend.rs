@@ -136,16 +136,10 @@ impl StorageBackend for ZfsBackend {
                 Zfs::clone(&snapshot, &jail_dataset)?;
             }
             JailType::Thin => {
-                let skel_dataset = format!("{jail_dataset}/skeleton");
-                Zfs::create_dataset(&skel_dataset)?;
-
-                let skel_mp = PathBuf::from(Zfs::get_mountpoint(&skel_dataset)?);
-                for dir in &["etc", "var", "tmp", "root"] {
-                    std::fs::create_dir_all(skel_mp.join(dir))?;
-                }
-
+                Zfs::create_dataset(&jail_dataset)?;
                 let root_dataset = format!("{jail_dataset}/root");
-                Zfs::create_dataset(&root_dataset)?;
+                let snapshot = format!("{base_dataset}@base");
+                Zfs::clone(&snapshot, &root_dataset)?;
             }
         }
 
