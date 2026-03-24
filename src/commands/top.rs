@@ -6,6 +6,7 @@ use clap_complete::engine::ArgValueCompleter;
 
 use crate::completions;
 use crate::freebsd::ps;
+use crate::freebsd::zfs::Zfs;
 use crate::jail::config::GlobalConfig;
 use crate::jail::lifecycle::JailLifecycle;
 use crate::jail::state::JailStatus;
@@ -68,7 +69,7 @@ extern "C" fn signal_handler(_sig: libc::c_int) {
 
 fn print_top(args: &TopArgs) -> anyhow::Result<()> {
     let global = GlobalConfig::load()?;
-    let lifecycle = JailLifecycle::new_readonly(global)?;
+    let lifecycle = JailLifecycle::new_readonly(global.clone())?;
 
     let jails: Vec<_> = lifecycle
         .list()
@@ -91,7 +92,12 @@ fn print_top(args: &TopArgs) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let mut table = Table::new(vec!["NAME", "JID", "CPU%", "MEM", "NPROC", "UPTIME"]);
+    let headers = if args.once {
+        vec!["NAME", "JID", "CPU%", "MEM", "NPROC", "DISK", "NET I/O", "UPTIME"]
+    } else {
+        vec!["NAME", "JID", "CPU%", "MEM", "NPROC", "DISK", "NET I/O", "CONN", "UPTIME"]
+    };
+    let mut table = Table::new(headers);
 
     for jail in &jails {
         let jid = jail.jid.unwrap_or(0);
@@ -115,23 +121,109 @@ fn print_top(args: &TopArgs) -> anyhow::Result<()> {
             "-".to_string()
         };
 
+        let disk = if global.storage_backend == "zfs" {
+            if let Ok(pool) = global.zfs_pool.as_deref().ok_or(()) {
+                let dataset = format!("{pool}/dail/jails/{}", jail.name());
+                Zfs::get_property(&dataset, "used")
+                    .unwrap_or_else(|_| "-".to_string())
+            } else {
+                "-".to_string()
+            }
+        } else {
+            "-".to_string()
+        };
+
+        let net_io = jail_net_io(jid);
+
         let uptime = jail
             .started_at
             .map(|t| format_duration(chrono::Utc::now() - t))
             .unwrap_or_else(|| "-".to_string());
 
-        table.add_row(vec![
+        let mut row = vec![
             jail.name().to_string(),
             jid.to_string(),
             cpu,
             mem,
             nproc,
-            uptime,
-        ]);
+            disk,
+            net_io,
+        ];
+        if !args.once {
+            row.push(jail_conn_count(jid));
+        }
+        row.push(uptime);
+        table.add_row(row);
     }
 
     table.print();
     Ok(())
+}
+
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1_073_741_824 {
+        format!("{:.1}G", bytes as f64 / 1_073_741_824.0)
+    } else if bytes >= 1_048_576 {
+        format!("{:.1}M", bytes as f64 / 1_048_576.0)
+    } else if bytes >= 1024 {
+        format!("{}K", bytes / 1024)
+    } else {
+        format!("{}B", bytes)
+    }
+}
+
+/// Get network I/O for a jail via netstat -j (works for both vnet and inherit).
+fn jail_net_io(jid: i32) -> String {
+    // netstat -j <jid> -bI gives per-interface byte counters
+    // For inherit jails this won't show jail-specific traffic, so fall back to "-"
+    let output = std::process::Command::new("netstat")
+        .args(["-j", &jid.to_string(), "-bn", "-f", "inet", "--libxo", "json"])
+        .output();
+
+    let output = match output {
+        Ok(o) if o.status.success() => o,
+        _ => return "-".to_string(),
+    };
+
+    // Parse JSON output for rx/tx bytes from statistics
+    let json_str = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = match serde_json::from_str(&json_str) {
+        Ok(v) => v,
+        Err(_) => return "-".to_string(),
+    };
+
+    let mut rx: u64 = 0;
+    let mut tx: u64 = 0;
+
+    if let Some(sockets) = json.pointer("/statistics/socket").and_then(|v| v.as_array()) {
+        for sock in sockets {
+            rx += sock.get("received-bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+            tx += sock.get("sent-bytes").and_then(|v| v.as_u64()).unwrap_or(0);
+        }
+    }
+
+    if rx == 0 && tx == 0 {
+        return "-".to_string();
+    }
+
+    format!("{}/{}", format_bytes(rx), format_bytes(tx))
+}
+
+/// Count active TCP connections for a jail via sockstat.
+fn jail_conn_count(jid: i32) -> String {
+    let output = std::process::Command::new("sockstat")
+        .args(["-j", &jid.to_string(), "-c", "-4", "-6", "-q", "-P", "tcp"])
+        .output();
+
+    match output {
+        Ok(o) if o.status.success() => {
+            let count = String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .count();
+            count.to_string()
+        }
+        _ => "-".to_string(),
+    }
 }
 
 fn format_mem_kb(kb: u64) -> String {

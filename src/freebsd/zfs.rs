@@ -34,10 +34,10 @@ impl Zfs {
         run_zfs(&["clone", snapshot, target])
     }
 
-    /// Get the mountpoint of a dataset.
-    pub fn get_mountpoint(dataset: &str) -> Result<String, ZfsError> {
+    /// Get a ZFS property value for a dataset.
+    pub fn get_property(dataset: &str, property: &str) -> Result<String, ZfsError> {
         let output = std::process::Command::new("zfs")
-            .args(["get", "-H", "-o", "value", "mountpoint", dataset])
+            .args(["get", "-H", "-o", "value", property, dataset])
             .output()?;
 
         if !output.status.success() {
@@ -47,6 +47,11 @@ impl Zfs {
         }
 
         Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+    }
+
+    /// Get the mountpoint of a dataset.
+    pub fn get_mountpoint(dataset: &str) -> Result<String, ZfsError> {
+        Self::get_property(dataset, "mountpoint")
     }
 
     /// Check if a dataset exists.
