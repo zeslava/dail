@@ -32,7 +32,7 @@ impl StorageBackend for ZfsBackend {
         let dataset = Self::base_dataset(config, release)?;
         if !Zfs::dataset_exists(&dataset)? {
             return Err(DailError::Storage(format!(
-                "base '{release}' not found. Run: dail bootstrap {release}"
+                "base '{release}' is not bootstrapped yet.\nDownload it first:\n\n  sudo dail bootstrap {release}\n  or\n  doas dail bootstrap {release}"
             )));
         }
         Zfs::get_mountpoint(&dataset)

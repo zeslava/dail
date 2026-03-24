@@ -63,7 +63,7 @@ impl StorageBackend for DirectoryBackend {
                 base_dir.display()
             );
             return Err(DailError::Storage(format!(
-                "base '{release}' not found. Run: dail bootstrap {release}"
+                "base '{release}' is not bootstrapped yet.\nDownload it first:\n\n  sudo dail bootstrap {release}\n  or\n  doas dail bootstrap {release}"
             )));
         }
         tracing::info!(
