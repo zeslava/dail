@@ -1,4 +1,5 @@
 use std::io::IsTerminal;
+use std::os::unix::io::AsRawFd;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use clap::Args;
@@ -46,6 +47,12 @@ pub fn run(args: TopArgs) -> anyhow::Result<()> {
         }
     }
 
+    let _raw_guard = if watch {
+        Some(RawModeGuard::enable()?)
+    } else {
+        None
+    };
+
     loop {
         if watch {
             print!("\x1b[2J\x1b[H");
@@ -57,7 +64,9 @@ pub fn run(args: TopArgs) -> anyhow::Result<()> {
             break;
         }
 
-        std::thread::sleep(std::time::Duration::from_secs(args.interval));
+        if wait_for_key_or_timeout(args.interval) {
+            break;
+        }
     }
 
     Ok(())
@@ -65,6 +74,54 @@ pub fn run(args: TopArgs) -> anyhow::Result<()> {
 
 extern "C" fn signal_handler(_sig: libc::c_int) {
     RUNNING.store(false, Ordering::Relaxed);
+}
+
+struct RawModeGuard {
+    orig: libc::termios,
+    fd: libc::c_int,
+}
+
+impl RawModeGuard {
+    fn enable() -> anyhow::Result<Self> {
+        let fd = std::io::stdin().as_raw_fd();
+        let mut orig: libc::termios = unsafe { std::mem::zeroed() };
+        if unsafe { libc::tcgetattr(fd, &mut orig) } != 0 {
+            anyhow::bail!("tcgetattr failed");
+        }
+        let mut raw = orig;
+        raw.c_lflag &= !(libc::ICANON | libc::ECHO);
+        if unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw) } != 0 {
+            anyhow::bail!("tcsetattr failed");
+        }
+        Ok(Self { orig, fd })
+    }
+}
+
+impl Drop for RawModeGuard {
+    fn drop(&mut self) {
+        unsafe {
+            libc::tcsetattr(self.fd, libc::TCSANOW, &self.orig);
+        }
+    }
+}
+
+fn wait_for_key_or_timeout(secs: u64) -> bool {
+    let fd = std::io::stdin().as_raw_fd();
+    let mut pfd = libc::pollfd {
+        fd,
+        events: libc::POLLIN,
+        revents: 0,
+    };
+    let timeout_ms = (secs * 1000) as libc::c_int;
+    let ret = unsafe { libc::poll(&mut pfd, 1, timeout_ms) };
+    if ret > 0 {
+        let mut buf = [0u8; 1];
+        let n = unsafe { libc::read(fd, buf.as_mut_ptr() as *mut libc::c_void, 1) };
+        if n == 1 && (buf[0] == b'q' || buf[0] == b'Q') {
+            return true;
+        }
+    }
+    false
 }
 
 fn print_top(args: &TopArgs) -> anyhow::Result<()> {
