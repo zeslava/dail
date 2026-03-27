@@ -60,7 +60,13 @@ pub fn run(args: LogsArgs) -> anyhow::Result<()> {
         let rel = log_file.strip_prefix('/').unwrap_or(log_file);
         state.root_path.join(rel)
     } else {
-        global.jails_dir().join(&args.name).join("cmd.log")
+        // Try service log first, fall back to cmd.log
+        let service_log = state.root_path.join(format!("var/log/{0}/{0}.log", args.name));
+        if service_log.exists() {
+            service_log
+        } else {
+            global.jails_dir().join(&args.name).join("cmd.log")
+        }
     };
 
     if !path.exists() {

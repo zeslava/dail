@@ -103,6 +103,7 @@ impl BuildExecutor {
             jail_config.base,
             jail_config.persist
         );
+        let jail_config_log_file = jail_config.log_file.clone();
         tracing::info!("Creating jail '{}'", name);
         lifecycle.create(jail_config)?;
         tracing::info!("Jail '{}' created", name);
@@ -247,6 +248,10 @@ impl BuildExecutor {
                             }
 
                             // Generate rc.d script
+                            let default_log = format!("/var/log/{svc}/{svc}.log");
+                            let svc_log = jail_config_log_file
+                                .as_deref()
+                                .unwrap_or(&default_log);
                             let rc_script = format!(
                                 r#"#!/bin/sh
 
@@ -272,7 +277,7 @@ stop_cmd="${{name}}_stop"
     if [ -f "/var/run/dail/{svc}.env" ]; then
         . "/var/run/dail/{svc}.env"
     fi
-    /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "/var/log/{svc}/{svc}.log" "${{command}}" ${{command_args}}
+    /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "{svc_log}" "${{command}}" ${{command_args}}
 }}
 
 {svc}_stop()
