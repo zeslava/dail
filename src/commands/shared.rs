@@ -22,6 +22,7 @@ pub struct CommonJailArgs<'a> {
     pub preset: Option<&'a str>,
     pub network: Option<&'a str>,
     pub publish: &'a [String],
+    pub envs: &'a [String],
 }
 
 /// Additional flags for JailConfig that differ between create and run
@@ -228,6 +229,15 @@ pub fn build_jail_config(
         ports.push(PortMapping::parse(p)?);
     }
 
+    // Parse env vars
+    let mut env = std::collections::HashMap::new();
+    for e in common.envs {
+        let (k, v) = e
+            .split_once('=')
+            .ok_or_else(|| anyhow::anyhow!("invalid env spec: {e}"))?;
+        env.insert(k.to_string(), v.to_string());
+    }
+
     let config = JailConfig {
         name,
         hostname: common.hostname.map(|s| s.to_string()),
@@ -242,6 +252,7 @@ pub fn build_jail_config(
         cmd: flags.cmd,
         log_file: flags.log_file,
         ports,
+        env,
     };
 
     let info = AllocationInfo {

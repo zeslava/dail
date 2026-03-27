@@ -278,7 +278,7 @@ impl JailLifecycle {
             } else {
                 self.config.jails_dir().join(state.name()).join("cmd.log")
             };
-            JailSys::exec_logged(&state.config.name, cmd, &log_path)?;
+            JailSys::exec_logged(&state.config.name, cmd, &log_path, &state.config.env)?;
         }
 
         Ok((jid, epair))

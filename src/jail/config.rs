@@ -267,6 +267,8 @@ pub struct JailConfig {
     pub log_file: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub ports: Vec<PortMapping>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub env: HashMap<String, String>,
 }
 
 impl JailConfig {
@@ -285,6 +287,7 @@ impl JailConfig {
             cmd: None,
             log_file: None,
             ports: Vec::new(),
+            env: HashMap::new(),
         }
     }
 }

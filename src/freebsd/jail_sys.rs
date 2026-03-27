@@ -154,16 +154,27 @@ impl JailSys {
 
     /// Execute a command inside a jail with stdout/stderr redirected to a log file.
     /// The process is spawned detached (does not block).
-    pub fn exec_logged(name: &str, cmd: &str, log_path: &std::path::Path) -> Result<(), JailError> {
+    pub fn exec_logged(
+        name: &str,
+        cmd: &str,
+        log_path: &std::path::Path,
+        env: &std::collections::HashMap<String, String>,
+    ) -> Result<(), JailError> {
         let log_file = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
             .open(log_path)?;
         let stderr_file = log_file.try_clone()?;
 
+        let mut args = vec!["env".to_string()];
+        for (k, v) in env {
+            args.push(format!("{k}={v}"));
+        }
+        args.extend(["/bin/sh".to_string(), "-c".to_string(), cmd.to_string()]);
+
         std::process::Command::new("jexec")
             .arg(name)
-            .args(["/bin/sh", "-c", cmd])
+            .args(&args)
             .stdout(log_file)
             .stderr(stderr_file)
             .stdin(std::process::Stdio::null())

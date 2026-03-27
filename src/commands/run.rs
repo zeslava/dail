@@ -66,6 +66,10 @@ pub struct RunArgs {
     #[arg(long = "mount-ro")]
     pub mounts_ro: Vec<String>,
 
+    /// Environment variable (KEY=VALUE)
+    #[arg(short = 'e', long = "env")]
+    pub envs: Vec<String>,
+
     /// Hostname
     #[arg(long)]
     pub hostname: Option<String>,
@@ -168,6 +172,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         preset: args.preset.as_deref(),
         network: args.network.as_deref(),
         publish: &args.publish,
+        envs: &args.envs,
     };
 
     let flags = ConfigFlags {
