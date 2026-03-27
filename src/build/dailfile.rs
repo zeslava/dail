@@ -34,6 +34,7 @@ pub enum Instruction {
     },
     Service {
         name: String,
+        command: String,
         create_user: bool,
     },
     Expose {
@@ -149,9 +150,9 @@ impl Dailfile {
                     }
                 }
                 "SERVICE" => {
-                    let mut parts = rest.split_whitespace();
+                    let mut parts: Vec<&str> = rest.split_whitespace().collect();
                     let svc_name = parts
-                        .next()
+                        .first()
                         .ok_or_else(|| {
                             DailError::Build(format!(
                                 "line {}: SERVICE requires a name",
@@ -159,9 +160,16 @@ impl Dailfile {
                             ))
                         })?
                         .to_string();
-                    let create_user = !parts.any(|p| p == "--no-user");
+                    let create_user = !parts.iter().any(|p| *p == "--no-user");
+                    parts.retain(|p| !p.starts_with("--"));
+                    let command = if parts.len() > 1 {
+                        parts[1].to_string()
+                    } else {
+                        format!("/usr/local/bin/{svc_name}")
+                    };
                     Instruction::Service {
                         name: svc_name,
+                        command,
                         create_user,
                     }
                 }

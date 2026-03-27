@@ -221,9 +221,10 @@ impl BuildExecutor {
                         }
                         Instruction::Service {
                             name: svc,
+                            command: svc_command,
                             create_user,
                         } => {
-                            tracing::info!("SERVICE {}", svc);
+                            tracing::info!("SERVICE {} (command: {})", svc, svc_command);
 
                             if *create_user {
                                 tracing::info!("SERVICE {}: creating user/group/dirs", svc);
@@ -245,6 +246,61 @@ impl BuildExecutor {
                                 }
                             }
 
+                            // Generate rc.d script
+                            let rc_script = format!(
+                                r#"#!/bin/sh
+
+. /etc/rc.subr
+
+name="{svc}"
+rcvar="{svc}_enable"
+
+load_rc_config $name
+
+: ${{{svc}_enable:="NO"}}
+: ${{{svc}_user:="{svc}"}}
+
+pidfile="/var/run/{svc}/{svc}.pid"
+command="{svc_command}"
+command_args=""
+
+start_cmd="${{name}}_start"
+stop_cmd="${{name}}_stop"
+
+{svc}_start()
+{{
+    /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" "${{command}}" ${{command_args}}
+}}
+
+{svc}_stop()
+{{
+    if [ -f "${{pidfile}}" ]; then
+        kill `cat "${{pidfile}}"`
+    fi
+}}
+
+run_rc_command "$1"
+"#
+                            );
+
+                            let rc_dir = root_path.join("usr/local/etc/rc.d");
+                            std::fs::create_dir_all(&rc_dir)?;
+                            let rc_path = rc_dir.join(svc);
+                            std::fs::write(&rc_path, rc_script).map_err(|e| {
+                                DailError::Build(format!(
+                                    "SERVICE {svc}: failed to write rc script: {e}"
+                                ))
+                            })?;
+                            #[cfg(unix)]
+                            {
+                                use std::os::unix::fs::PermissionsExt;
+                                std::fs::set_permissions(
+                                    &rc_path,
+                                    std::fs::Permissions::from_mode(0o755),
+                                )?;
+                            }
+
+                            // Enable in rc.conf
                             let rc_conf = root_path.join("etc/rc.conf");
                             use std::io::Write;
                             let mut f = std::fs::OpenOptions::new()
