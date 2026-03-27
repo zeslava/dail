@@ -269,6 +269,9 @@ stop_cmd="${{name}}_stop"
 
 {svc}_start()
 {{
+    if [ -f "/var/run/dail/{svc}.env" ]; then
+        . "/var/run/dail/{svc}.env"
+    fi
     /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" "${{command}}" ${{command_args}}
 }}
 

@@ -271,7 +271,22 @@ impl JailLifecycle {
             std::fs::set_permissions(&log_path, std::fs::Permissions::from_mode(0o666))?;
         }
 
-        // 8. Run CMD if configured
+        // 8. Write env file for rc.d scripts
+        if !state.config.env.is_empty() {
+            let env_dir = state.root_path.join("var/run/dail");
+            std::fs::create_dir_all(&env_dir)?;
+            let env_path = env_dir.join(format!("{}.env", state.config.name));
+            let content: String = state
+                .config
+                .env
+                .iter()
+                .map(|(k, v)| format!("export {k}=\"{v}\""))
+                .collect::<Vec<_>>()
+                .join("\n");
+            std::fs::write(&env_path, content + "\n")?;
+        }
+
+        // 9. Run CMD if configured
         if let Some(ref cmd) = state.config.cmd {
             let log_path = if let Some(ref log_file) = state.config.log_file {
                 let rel = log_file.strip_prefix('/').unwrap_or(log_file);
