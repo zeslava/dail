@@ -46,7 +46,7 @@ pub struct CreateArgs {
     pub vnet_gateway: Option<String>,
 
     /// nullfs mount (host:jail)
-    #[arg(long = "mount")]
+    #[arg(short = 'm', long = "mount")]
     pub mounts: Vec<String>,
 
     /// Read-only nullfs mount (host:jail)
