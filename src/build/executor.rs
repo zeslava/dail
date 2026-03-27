@@ -47,6 +47,10 @@ impl BuildExecutor {
                         fs_type: "nullfs".to_string(),
                     });
                 }
+                Instruction::Env { key, value } => {
+                    tracing::info!("ENV {}={}", key, value);
+                    jail_config.env.insert(key.clone(), value.clone());
+                }
                 Instruction::Cmd { command } => {
                     jail_config.cmd = Some(command.clone());
                 }
@@ -91,6 +95,7 @@ impl BuildExecutor {
             jail_config.mounts.extend(cli.mounts.iter().cloned());
             jail_config.auto_remove = cli.auto_remove;
             jail_config.ports.extend(cli.ports.iter().cloned());
+            jail_config.env.extend(cli.env.iter().map(|(k, v)| (k.clone(), v.clone())));
         }
 
         tracing::info!(
@@ -211,20 +216,8 @@ impl BuildExecutor {
                                 std::fs::copy(src, &dst)?;
                             }
                         }
-                        Instruction::Env { key, value } => {
-                            tracing::info!("ENV {}={}", key, value);
-                            let profile = root_path.join("etc/profile");
-                            use std::io::Write;
-                            let mut f = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open(&profile)
-                                .map_err(|e| {
-                                    DailError::Build(format!("failed to write /etc/profile: {e}"))
-                                })?;
-                            writeln!(f, "export {key}=\"{value}\"").map_err(|e| {
-                                DailError::Build(format!("failed to write /etc/profile: {e}"))
-                            })?;
+                        Instruction::Env { .. } => {
+                            // ENV is handled in the first pass (stored in jail_config.env)
                         }
                         Instruction::Service {
                             name: svc,
