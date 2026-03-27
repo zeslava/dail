@@ -272,7 +272,7 @@ stop_cmd="${{name}}_stop"
     if [ -f "/var/run/dail/{svc}.env" ]; then
         . "/var/run/dail/{svc}.env"
     fi
-    /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" "${{command}}" ${{command_args}}
+    /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "/var/log/{svc}/{svc}.log" "${{command}}" ${{command_args}}
 }}
 
 {svc}_stop()
