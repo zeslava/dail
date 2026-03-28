@@ -81,6 +81,7 @@ impl BuildExecutor {
             for instruction in &dailfile.instructions {
                 if let Instruction::Service { name, .. } = instruction {
                     jail_config.cmd = Some(format!("service {name} start"));
+                    jail_config.persist = true;
                     break;
                 }
             }

@@ -78,7 +78,7 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 | `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
 | `PARAM` | `PARAM <key>=<value>` | Set jail parameter |
 | `MOUNT` | `MOUNT [ro:]<src>:<dst>` | Mount host directory (optional `ro:` prefix) |
-| `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs |
+| `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs, set persist |
 | `LOG` | `LOG <path>` | Log file for `dail logs` |
 | `EXPOSE` | `EXPOSE [host:]<port>` | Port forwarding (overridden by `-p`) |
 | `CMD` | `CMD <command>` | Startup command (overrides SERVICE default) |
