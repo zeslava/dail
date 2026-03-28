@@ -134,12 +134,6 @@ fn builtin(name: &str) -> Option<Preset> {
                 limits: HashMap::new(),
             })
         }
-        "nginx" => Some(Preset {
-            name: "nginx".to_string(),
-            description: "Nginx web server".to_string(),
-            params: HashMap::new(),
-            limits: HashMap::new(),
-        }),
         "dev" => {
             params.insert("allow.raw_sockets".to_string(), "true".to_string());
             params.insert("allow.sysvipc".to_string(), "true".to_string());

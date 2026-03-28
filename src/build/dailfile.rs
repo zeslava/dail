@@ -12,6 +12,7 @@ pub enum Instruction {
     Copy {
         source: String,
         destination: String,
+        chown: Option<String>,
     },
     Env {
         key: String,
@@ -77,6 +78,19 @@ impl Dailfile {
                     command: rest.to_string(),
                 },
                 "COPY" => {
+                    let mut chown = None;
+                    let rest = if rest.starts_with("--chown=") {
+                        let (flag, remainder) = rest.split_once(char::is_whitespace).ok_or_else(|| {
+                            DailError::Build(format!(
+                                "line {}: COPY --chown requires <src> <dst>",
+                                line_num + 1
+                            ))
+                        })?;
+                        chown = Some(flag.strip_prefix("--chown=").unwrap().to_string());
+                        remainder.trim()
+                    } else {
+                        rest
+                    };
                     let (src, dst) = rest.split_once(char::is_whitespace).ok_or_else(|| {
                         DailError::Build(format!(
                             "line {}: COPY requires <src> <dst>",
@@ -86,6 +100,7 @@ impl Dailfile {
                     Instruction::Copy {
                         source: src.trim().to_string(),
                         destination: dst.trim().to_string(),
+                        chown,
                     }
                 }
                 "ENV" => {

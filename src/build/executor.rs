@@ -72,19 +72,25 @@ impl BuildExecutor {
             }
         }
 
-        // SERVICE sets default CMD if no explicit CMD was given
-        let has_explicit_cmd = dailfile
-            .instructions
-            .iter()
-            .any(|i| matches!(i, Instruction::Cmd { .. }));
-        if !has_explicit_cmd {
-            for instruction in &dailfile.instructions {
-                if let Instruction::Service { name, .. } = instruction {
-                    jail_config.cmd = Some(format!("service {name} start"));
-                    jail_config.persist = true;
-                    break;
-                }
+        // Extract service name (order-independent)
+        let service_name = dailfile.instructions.iter().find_map(|i| {
+            if let Instruction::Service { name, .. } = i {
+                Some(name.clone())
+            } else {
+                None
             }
+        });
+
+        // SERVICE sets default CMD and persist if no explicit CMD was given
+        if let Some(ref svc) = service_name {
+            let has_explicit_cmd = dailfile
+                .instructions
+                .iter()
+                .any(|i| matches!(i, Instruction::Cmd { .. }));
+            if !has_explicit_cmd {
+                jail_config.cmd = Some(format!("service {svc} start"));
+            }
+            jail_config.persist = true;
         }
 
         // CLI args override .dail file (network, hostname, mounts from CLI take precedence)
@@ -182,6 +188,7 @@ impl BuildExecutor {
                         Instruction::Copy {
                             source,
                             destination,
+                            chown,
                         } => {
                             tracing::info!("COPY {} -> {}", source, destination);
                             let jail_state = lifecycle
@@ -259,6 +266,19 @@ impl BuildExecutor {
                                     }
                                 } else {
                                     std::fs::copy(src, &dst_base)?;
+                                }
+                            }
+
+                            let owner = chown.clone().or_else(|| {
+                                service_name.as_ref().map(|svc| format!("{svc}:{svc}"))
+                            });
+                            if let Some(owner) = owner {
+                                let chown_cmd = format!("chown -R {owner} {destination}");
+                                let status = lifecycle.exec(name, &["/bin/sh", "-c", &chown_cmd])?;
+                                if !status.success() {
+                                    return Err(DailError::Build(format!(
+                                        "COPY chown failed for {destination}"
+                                    )));
                                 }
                             }
                         }

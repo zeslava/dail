@@ -49,7 +49,6 @@ COPY nginx.conf /usr/local/etc/nginx/nginx.conf
 ENV APP_ENV=production
 
 # Jail parameters (FreeBSD jail.conf options)
-PARAM persist=true
 PARAM allow.raw_sockets=true
 
 # Mount host directories into the jail
@@ -74,14 +73,29 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 |-----------|--------|-------------|
 | `FROM` | `FROM <release>` | FreeBSD base release |
 | `RUN` | `RUN <command>` | Execute command during build |
-| `COPY` | `COPY <src> <dst>` | Copy files from build context into jail |
+| `COPY` | `COPY [--chown=u:g] <src> <dst>` | Copy files into jail (supports globs). Auto-chown to SERVICE user if present |
 | `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
-| `PARAM` | `PARAM <key>=<value>` | Set jail parameter |
+| `PARAM` | `PARAM <key>=<value>` | Set jail parameter (see [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))) |
 | `MOUNT` | `MOUNT [ro:]<src>:<dst>` | Mount host directory (optional `ro:` prefix) |
 | `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs, set persist |
 | `LOG` | `LOG <path>` | Log file for `dail logs` |
-| `EXPOSE` | `EXPOSE [host:]<port>` | Port forwarding (overridden by `-p`) |
+| `EXPOSE` | `EXPOSE [host:]<port>[/proto]` | Port forwarding (default tcp, overridden by `-p`) |
 | `CMD` | `CMD <command>` | Startup command (overrides SERVICE default) |
+
+### Common PARAM values
+
+| Parameter | Description |
+|-----------|-------------|
+| `allow.raw_sockets=true` | Allow ping and raw socket access |
+| `allow.sysvipc=true` | Allow SysV IPC (required by PostgreSQL) |
+| `allow.mlock=true` | Allow memory locking |
+| `allow.chflags=true` | Allow changing file flags |
+| `ip4=inherit` | Share host IPv4 stack |
+| `ip6=inherit` | Share host IPv6 stack |
+| `children.max=5` | Allow nested jails (up to N) |
+| `securelevel=0` | Set jail securelevel |
+
+Full list: [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))
 
 ### Example: deploy your app
 
@@ -305,8 +319,7 @@ Presets apply common jail parameters in one flag:
 
 | Preset | What it does |
 |--------|-------------|
-| `postgres` | `allow.sysvipc=true`, `persist=true` |
-| `nginx` | `persist=true` |
+| `postgres` | `allow.sysvipc=true` |
 | `dev` | `allow.raw_sockets=true`, `allow.sysvipc=true` |
 
 Custom presets: create YAML (or TOML) files in `/var/db/dail/presets/`:
@@ -314,7 +327,6 @@ Custom presets: create YAML (or TOML) files in `/var/db/dail/presets/`:
 ```yaml
 # /var/db/dail/presets/myapp.yaml
 description: "My custom app"
-persist: true
 params:
   allow.raw_sockets: "true"
 limits:
