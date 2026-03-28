@@ -1,22 +1,6 @@
 use crate::jail::config::PortMapping;
 use std::process::Command;
 
-/// Get the default route interface name.
-fn default_interface() -> Option<String> {
-    let output = Command::new("route")
-        .args(["-n", "get", "default"])
-        .output()
-        .ok()?;
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines() {
-        let line = line.trim();
-        if let Some(iface) = line.strip_prefix("interface:") {
-            return Some(iface.trim().to_string());
-        }
-    }
-    None
-}
-
 /// Check if /etc/pf.conf contains the required rdr-anchor for dail.
 fn check_pf_anchor() {
     let content = match std::fs::read_to_string("/etc/pf.conf") {
@@ -59,26 +43,18 @@ pub fn setup_port_forwarding(jail_name: &str, jail_ip: &str, ports: &[PortMappin
 
     check_pf_anchor();
 
-    let iface = match default_interface() {
-        Some(i) => i,
-        None => {
-            eprintln!("warning: could not determine default interface, skipping port forwarding");
-            return;
-        }
-    };
-
     // Strip CIDR suffix from jail IP (e.g. 10.100.0.5/24 -> 10.100.0.5)
     let ip = jail_ip.split('/').next().unwrap_or(jail_ip);
 
     let mut rules = String::new();
     for p in ports {
         let on = if let Some(ref host_ip) = p.host_ip {
-            format!("on {{ {} }}", host_ip)
+            format!(" on {{ {} }}", host_ip)
         } else {
-            format!("on {}", iface)
+            String::new()
         };
         rules.push_str(&format!(
-            "rdr pass {} proto {} from any to any port {} -> {} port {}\n",
+            "rdr pass{} proto {} from any to any port {} -> {} port {}\n",
             on, p.proto, p.host_port, ip, p.jail_port
         ));
     }
