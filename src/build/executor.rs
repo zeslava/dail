@@ -57,14 +57,14 @@ impl BuildExecutor {
                 Instruction::Log { path } => {
                     jail_config.log_file = Some(path.clone());
                 }
-                Instruction::Expose { host_port, jail_port } => {
+                Instruction::Expose { host_port, jail_port, proto } => {
                     // Skip EXPOSE if -p was provided on CLI
                     if !has_cli_ports {
                         jail_config.ports.push(PortMapping {
                             host_ip: None,
                             host_port: *host_port,
                             jail_port: *jail_port,
-                            proto: "tcp".to_string(),
+                            proto: proto.clone(),
                         });
                     }
                 }

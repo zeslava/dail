@@ -18,7 +18,7 @@ pub struct CommonJailArgs<'a> {
     pub hostname: Option<&'a str>,
     pub allows: &'a [String],
     pub limits: &'a [String],
-    pub persist: bool,
+    pub no_persist: bool,
     pub preset: Option<&'a str>,
     pub network: Option<&'a str>,
     pub publish: &'a [String],
@@ -191,7 +191,7 @@ pub fn build_jail_config(
     // Build params and limits, applying preset as base
     let mut params = std::collections::HashMap::new();
     let mut limits = std::collections::HashMap::new();
-    let mut persist = common.persist;
+    let persist = !common.no_persist;
 
     // Apply preset values as base
     if let Some(ref preset) = preset {
@@ -200,9 +200,6 @@ pub fn build_jail_config(
         }
         for (k, v) in &preset.limits {
             limits.insert(k.clone(), v.clone());
-        }
-        if preset.persist {
-            persist = true;
         }
     }
 

@@ -40,6 +40,7 @@ pub enum Instruction {
     Expose {
         host_port: u16,
         jail_port: u16,
+        proto: String,
     },
 }
 
@@ -127,13 +128,19 @@ impl Dailfile {
                     path: rest.to_string(),
                 },
                 "EXPOSE" => {
-                    let parts: Vec<&str> = rest.split(':').collect();
+                    // Split off /proto suffix (default: tcp)
+                    let (port_part, proto) = if let Some((p, pr)) = rest.rsplit_once('/') {
+                        (p, pr.to_string())
+                    } else {
+                        (rest, "tcp".to_string())
+                    };
+                    let parts: Vec<&str> = port_part.split(':').collect();
                     match parts.len() {
                         1 => {
                             let port: u16 = parts[0].trim().parse().map_err(|_| {
                                 DailError::Build(format!("line {}: invalid port: {}", line_num + 1, parts[0]))
                             })?;
-                            Instruction::Expose { host_port: port, jail_port: port }
+                            Instruction::Expose { host_port: port, jail_port: port, proto }
                         }
                         2 => {
                             let host_port: u16 = parts[0].trim().parse().map_err(|_| {
@@ -142,10 +149,10 @@ impl Dailfile {
                             let jail_port: u16 = parts[1].trim().parse().map_err(|_| {
                                 DailError::Build(format!("line {}: invalid jail port: {}", line_num + 1, parts[1]))
                             })?;
-                            Instruction::Expose { host_port, jail_port }
+                            Instruction::Expose { host_port, jail_port, proto }
                         }
                         _ => return Err(DailError::Build(format!(
-                            "line {}: EXPOSE requires port or host_port:jail_port", line_num + 1
+                            "line {}: EXPOSE requires port[/proto] or host_port:jail_port[/proto]", line_num + 1
                         ))),
                     }
                 }

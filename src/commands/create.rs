@@ -69,9 +69,9 @@ pub struct CreateArgs {
     #[arg(long = "limit")]
     pub limits: Vec<String>,
 
-    /// Keep jail alive without processes
+    /// Destroy jail when no processes are running
     #[arg(long)]
-    pub persist: bool,
+    pub no_persist: bool,
 
     /// Apply a preset (e.g. postgres, nginx, dev)
     #[arg(long, add = ArgValueCompleter::new(completions::complete_preset_names))]
@@ -107,7 +107,7 @@ pub fn run(args: CreateArgs) -> anyhow::Result<()> {
         hostname: args.hostname.as_deref(),
         allows: &args.allows,
         limits: &args.limits,
-        persist: args.persist,
+        no_persist: args.no_persist,
         preset: args.preset.as_deref(),
         network: args.network.as_deref(),
         publish: &args.publish,

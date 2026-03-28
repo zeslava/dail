@@ -284,7 +284,7 @@ impl JailConfig {
             mounts: Vec::new(),
             params: HashMap::new(),
             limits: HashMap::new(),
-            persist: false,
+            persist: true,
             auto_remove: false,
             cmd: None,
             log_file: None,

@@ -15,8 +15,6 @@ pub struct Preset {
     pub params: HashMap<String, String>,
     #[serde(default)]
     pub limits: HashMap<String, String>,
-    #[serde(default)]
-    pub persist: bool,
 }
 
 impl Preset {
@@ -134,7 +132,6 @@ fn builtin(name: &str) -> Option<Preset> {
                 description: "PostgreSQL — enables SysV IPC".to_string(),
                 params,
                 limits: HashMap::new(),
-                persist: true,
             })
         }
         "nginx" => Some(Preset {
@@ -142,7 +139,6 @@ fn builtin(name: &str) -> Option<Preset> {
             description: "Nginx web server".to_string(),
             params: HashMap::new(),
             limits: HashMap::new(),
-            persist: true,
         }),
         "dev" => {
             params.insert("allow.raw_sockets".to_string(), "true".to_string());
@@ -152,7 +148,6 @@ fn builtin(name: &str) -> Option<Preset> {
                 description: "Development — raw sockets + SysV IPC".to_string(),
                 params,
                 limits: HashMap::new(),
-                persist: false,
             })
         }
         _ => None,
