@@ -72,14 +72,14 @@ impl BuildExecutor {
             }
         }
 
-        // Extract service name (order-independent)
-        let service_name = dailfile.instructions.iter().find_map(|i| {
-            if let Instruction::Service { name, .. } = i {
-                Some(name.clone())
+        // Extract service name and create_user flag (order-independent)
+        let (service_name, service_create_user) = dailfile.instructions.iter().find_map(|i| {
+            if let Instruction::Service { name, create_user, .. } = i {
+                Some((Some(name.clone()), *create_user))
             } else {
                 None
             }
-        });
+        }).unwrap_or((None, false));
 
         // SERVICE sets default CMD and persist if no explicit CMD was given
         if let Some(ref svc) = service_name {
@@ -170,6 +170,34 @@ impl BuildExecutor {
             let pkg_repos_jail = root_path.join("var/db/pkg/repos");
             std::fs::create_dir_all(&pkg_repos_jail)?;
             NullfsMount::mount(&pkg_repos_host, &pkg_repos_jail, false)?;
+
+            // Create service user before instructions so COPY auto-chown works
+            if let Some(ref svc) = service_name {
+                if service_create_user {
+                    tracing::info!("Creating service user/group '{}'", svc);
+                    let uid_flag = match jail_config_service_uid {
+                        Some(uid) => format!(" -u {uid} -g {uid}"),
+                        None => format!(" -g {svc}"),
+                    };
+                    let gid_flag = match jail_config_service_uid {
+                        Some(gid) => format!(" -g {gid}"),
+                        None => String::new(),
+                    };
+                    let setup_script = format!(
+                        "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
+                         pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc}{uid_flag} -m -s /usr/sbin/nologin && \
+                         mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
+                         chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc}"
+                    );
+                    let status = lifecycle.exec(name, &["/bin/sh", "-c", &setup_script])?;
+                    if !status.success() {
+                        return Err(DailError::Build(format!(
+                            "SERVICE {svc}: failed to create user/group/dirs (exit code {:?})",
+                            status.code()
+                        )));
+                    }
+                }
+            }
 
             tracing::info!("Starting build instructions execution");
             let exec_result = (|| -> Result<(), DailError> {
@@ -288,37 +316,10 @@ impl BuildExecutor {
                         Instruction::Service {
                             name: svc,
                             command: svc_command,
-                            create_user,
+                            ..
                         } => {
                             tracing::info!("SERVICE {} (command: {})", svc, svc_command);
-
-                            if *create_user {
-                                tracing::info!("SERVICE {}: creating user/group/dirs", svc);
-                                let uid_flag = match jail_config_service_uid {
-                                    Some(uid) => format!(" -u {uid} -g {uid}"),
-                                    None => format!(" -g {svc}"),
-                                };
-                                let gid_flag = match jail_config_service_uid {
-                                    Some(gid) => format!(" -g {gid}"),
-                                    None => String::new(),
-                                };
-                                let setup_script = format!(
-                                    "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
-                                     pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc}{uid_flag} -m -s /usr/sbin/nologin && \
-                                     mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
-                                     chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc}"
-                                );
-                                let status = lifecycle.exec(
-                                    name,
-                                    &["/bin/sh", "-c", &setup_script],
-                                )?;
-                                if !status.success() {
-                                    return Err(DailError::Build(format!(
-                                        "SERVICE {svc}: failed to create user/group/dirs (exit code {:?})",
-                                        status.code()
-                                    )));
-                                }
-                            }
+                            // User/group creation is handled before the instruction loop
 
                             // Generate rc.d script
                             let default_log = format!("/var/log/{svc}/{svc}.log");
