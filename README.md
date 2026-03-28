@@ -12,23 +12,114 @@ Daily jail management for FreeBSD
 - **ZFS support:** snapshots, clones, ZFS-backed storage
 - **Resource limits:** rctl-based CPU/memory/process limits
 
-## Quick Start
+## Getting Started
 
 ```bash
-# Initialize dail
-dail config init
+# 1. Install dail
+cargo build --release
+doas install -m 755 target/release/dail /usr/local/bin/dail
 
-# Download FreeBSD base (default: 15.0-RELEASE)
-dail bootstrap
+# 2. Initialize (creates /var/db/dail/, writes default config)
+doas dail config init
 
-# Run a jail (create + start in one step)
-dail run myjail
+# 3. Download FreeBSD base
+doas dail bootstrap
 
-# Run with a preset
-dail run postgres-jail --preset postgres
+# 4. Run your first jail
+doas dail run myjail
 
-# Run a disposable jail (auto-removed on stop)
-dail run temp-jail --rm
+# 5. Open a shell inside
+doas dail console myjail
+
+# 6. Stop and remove
+doas dail stop myjail
+doas dail rm myjail
+```
+
+## Examples
+
+### PostgreSQL
+
+```dockerfile
+# postgres.dail
+FROM 15.0-RELEASE
+
+PARAM allow.sysvipc=true
+
+RUN pkg install -y postgresql18-server
+
+SERVICE postgresql --no-user
+
+RUN service postgresql oneinitdb
+
+COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
+COPY pg_hba.conf /var/db/postgres/data18/pg_hba.conf
+
+EXPOSE 5432
+```
+
+```bash
+# Build and run
+doas dail run postgres.dail --preset postgres
+
+# Check status
+doas dail ls
+
+# View logs
+doas dail logs postgresql
+
+# Create a user and database for your app (e.g. "zid")
+doas -u postgres createuser --pwprompt zid -h 10.100.0.2
+doas -u postgres createdb -O zid zid -h 10.100.0.2
+
+# Connect from host
+psql -h 10.100.0.2 -U zid -d zid
+
+# Open shell inside jail
+doas dail console postgresql
+
+# Stop and remove
+doas dail stop postgresql
+doas dail rm postgresql
+```
+
+### Custom Rust service (filest)
+
+```dockerfile
+# filest.dail
+FROM 15.0-RELEASE
+
+SERVICE filest
+
+COPY target/release/filest /usr/local/bin/filest
+
+EXPOSE 8090
+```
+
+```bash
+# Build the binary on host first
+cargo build --release
+
+# Build jail and run
+# --uid makes mount ownership match host user
+# -e passes namespace config to the service
+doas dail run filest.dail --uid 1001 \
+  --mount /home/user/photos:/data/photos \
+  -e NS_photos=/data/photos
+
+# Check it's running
+doas dail ls
+curl http://10.100.0.2:8090/
+
+# View logs
+doas dail logs filest
+
+# Rebuild after code changes
+cargo build --release
+doas dail run filest.dail --rebuild
+
+# Stop
+doas dail stop filest
 ```
 
 ## `.dail` File Reference
@@ -96,104 +187,6 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 | `securelevel=0` | Set jail securelevel |
 
 Full list: [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))
-
-### Getting started from scratch
-
-```bash
-# 1. Install dail
-cargo build --release
-doas install -m 755 target/release/dail /usr/local/bin/dail
-
-# 2. Initialize (creates /var/db/dail/, writes default config)
-doas dail config init
-
-# 3. Download FreeBSD base
-doas dail bootstrap
-```
-
-### Example: PostgreSQL
-
-```dockerfile
-# postgres.dail
-FROM 15.0-RELEASE
-
-PARAM allow.sysvipc=true
-
-RUN pkg install -y postgresql18-server
-
-SERVICE postgresql --no-user
-
-RUN service postgresql oneinitdb
-
-COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
-COPY pg_hba.conf /var/db/postgres/data18/pg_hba.conf
-
-EXPOSE 5432
-```
-
-```bash
-# Build and run
-doas dail run postgres.dail --preset postgres
-
-# Check status
-doas dail ls
-
-# View logs
-doas dail logs postgresql
-
-# Create a user and database for your app (e.g. "zid")
-doas -u postgres createuser --pwprompt zid -h 10.100.0.2
-doas -u postgres createdb -O zid zid -h 10.100.0.2
-
-# Connect from host
-psql -h 10.100.0.2 -U zid -d zid
-
-# Open shell inside jail
-doas dail console postgresql
-
-# Stop and remove
-doas dail stop postgresql
-doas dail rm postgresql
-```
-
-### Example: custom Rust service (filest)
-
-```dockerfile
-# filest.dail
-FROM 15.0-RELEASE
-
-SERVICE filest
-
-COPY target/release/filest /usr/local/bin/filest
-
-EXPOSE 8090
-```
-
-```bash
-# Build the binary on host first
-cargo build --release
-
-# Build jail and run
-# --uid makes mount ownership match host user
-# -e passes namespace config to the service
-doas dail run filest.dail --uid 1001 \
-  --mount /home/user/photos:/data/photos \
-  -e NS_photos=/data/photos
-
-# Check it's running
-doas dail ls
-curl http://10.100.0.2:8090/
-
-# View logs
-doas dail logs filest
-
-# Rebuild after code changes
-cargo build --release
-doas dail run filest.dail --rebuild
-
-# Stop
-doas dail stop filest
-```
 
 ## Commands
 
@@ -313,13 +306,6 @@ dail logs myjail                        # CMD output (or LOG file if set in .dai
 dail logs myjail --tail 20              # last 20 lines
 dail logs myjail -f                     # follow (like tail -f)
 dail logs myjail --file /var/log/messages  # read arbitrary file from jail rootfs
-```
-
-`.dail` file example:
-```dockerfile
-SERVICE postgresql          # auto-creates user/group/dirs, use --no-user to skip
-LOG /var/log/postgresql.log
-EXPOSE 5432                 # port forwarding (host_port:jail_port or just port)
 ```
 
 ### Monitoring
