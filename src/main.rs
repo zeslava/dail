@@ -48,8 +48,8 @@ enum Commands {
     Inspect(commands::inspect::InspectArgs),
     /// Execute a command in a running jail
     Exec(commands::exec::ExecArgs),
-    /// Open an interactive console in a jail
-    Console(commands::console::ConsoleArgs),
+    /// Open an interactive shell in a jail
+    Shell(commands::console::ConsoleArgs),
     /// Build a jail from a .dail file
     Build(commands::build::BuildArgs),
     /// Create a ZFS snapshot of a jail
@@ -161,7 +161,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Ls(args) => commands::ls::run(args)?,
         Commands::Inspect(args) => commands::inspect::run(args)?,
         Commands::Exec(args) => commands::exec::run(args)?,
-        Commands::Console(args) => commands::console::run(args)?,
+        Commands::Shell(args) => commands::console::run(args)?,
         Commands::Build(args) => commands::build::run(args)?,
         Commands::Snapshot(args) => commands::snapshot::run(args)?,
         Commands::Clone(args) => commands::clone::run(args)?,

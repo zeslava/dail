@@ -7,8 +7,8 @@ use crate::jail::lifecycle::JailLifecycle;
 #[derive(Args)]
 #[command(after_long_help = "\
 Examples:
-  dail console myjail                Open shell (/bin/sh)
-  dail console myjail --shell /bin/csh")]
+  dail shell myjail                 Open shell (/bin/sh)
+  dail shell myjail --shell /bin/csh")]
 pub struct ConsoleArgs {
     #[arg(add = ArgValueCompleter::new(completions::complete_running_jail_names))]
     pub name: String,

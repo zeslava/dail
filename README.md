@@ -29,7 +29,7 @@ doas dail bootstrap
 doas dail run myjail
 
 # 5. Open a shell inside
-doas dail console myjail
+doas dail shell myjail
 
 # 6. Stop and remove
 doas dail stop myjail
@@ -76,7 +76,7 @@ doas -u postgres createdb -O zid zid -h 10.100.0.2
 psql -h 10.100.0.2 -U zid -d zid
 
 # Open shell inside jail
-doas dail console postgresql
+doas dail shell postgresql
 
 # Stop and remove
 doas dail stop postgresql
@@ -290,11 +290,11 @@ dail exec myjail ls /etc
 dail exec myjail pkg install -y nginx
 ```
 
-**`dail console`** — Open an interactive shell.
+**`dail shell`** — Open an interactive shell.
 
 ```bash
-dail console myjail                 # default /bin/sh
-dail console myjail --shell /bin/csh
+dail shell myjail                 # default /bin/sh
+dail shell myjail --shell /bin/csh
 ```
 
 ### Logs
