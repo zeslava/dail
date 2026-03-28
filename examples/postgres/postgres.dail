@@ -1,9 +1,5 @@
 FROM 15.0-RELEASE
 
-# Keep jail alive without processes
-PARAM persist=true
-
-# Allow SysV IPC (required by PostgreSQL)
 PARAM allow.sysvipc=true
 
 RUN pkg install -y postgresql18-server

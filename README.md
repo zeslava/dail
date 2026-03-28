@@ -97,25 +97,102 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 
 Full list: [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))
 
-### Example: deploy your app
+### Getting started from scratch
 
 ```bash
-# 1. Create a .dail file in your project
-cat > myapp.dail <<'EOF'
+# 1. Install dail
+cargo build --release
+doas install -m 755 target/release/dail /usr/local/bin/dail
+
+# 2. Initialize (creates /var/db/dail/, writes default config)
+doas dail config init
+
+# 3. Download FreeBSD base
+doas dail bootstrap
+```
+
+### Example: PostgreSQL
+
+```dockerfile
+# postgres.dail
 FROM 15.0-RELEASE
-RUN pkg install -y go
-COPY . /opt/myapp
-RUN cd /opt/myapp && go build -o /usr/local/bin/myapp
-EXPOSE 8080
-CMD /usr/local/bin/myapp
-EOF
 
-# 2. Build and run
-dail run myapp --build myapp.dail
+PARAM allow.sysvipc=true
 
-# 3. Check logs and status
-dail logs myapp
-dail ls
+RUN pkg install -y postgresql18-server
+
+SERVICE postgresql --no-user
+
+RUN service postgresql oneinitdb
+
+COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
+COPY pg_hba.conf /var/db/postgres/data18/pg_hba.conf
+
+EXPOSE 5432
+```
+
+```bash
+# Build and run
+doas dail run postgres.dail --preset postgres
+
+# Check status
+doas dail ls
+
+# View logs
+doas dail logs postgresql
+
+# Create a user and database for your app (e.g. "zid")
+doas -u postgres createuser --pwprompt zid -h 10.100.0.2
+doas -u postgres createdb -O zid zid -h 10.100.0.2
+
+# Connect from host
+psql -h 10.100.0.2 -U zid -d zid
+
+# Open shell inside jail
+doas dail console postgresql
+
+# Stop and remove
+doas dail stop postgresql
+doas dail rm postgresql
+```
+
+### Example: custom Rust service (filest)
+
+```dockerfile
+# filest.dail
+FROM 15.0-RELEASE
+
+SERVICE filest
+
+COPY target/release/filest /usr/local/bin/filest
+
+EXPOSE 8090
+```
+
+```bash
+# Build the binary on host first
+cargo build --release
+
+# Build jail and run
+# --uid makes mount ownership match host user
+# -e passes namespace config to the service
+doas dail run filest.dail --uid 1001 \
+  --mount /home/user/photos:/data/photos \
+  -e NS_photos=/data/photos
+
+# Check it's running
+doas dail ls
+curl http://10.100.0.2:8090/
+
+# View logs
+doas dail logs filest
+
+# Rebuild after code changes
+cargo build --release
+doas dail run filest.dail --rebuild
+
+# Stop
+doas dail stop filest
 ```
 
 ## Commands
