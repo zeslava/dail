@@ -23,6 +23,7 @@ pub struct CommonJailArgs<'a> {
     pub network: Option<&'a str>,
     pub publish: &'a [String],
     pub envs: &'a [String],
+    pub uid: Option<u32>,
 }
 
 /// Additional flags for JailConfig that differ between create and run
@@ -253,6 +254,7 @@ pub fn build_jail_config(
         log_file: flags.log_file,
         ports,
         env,
+        service_uid: common.uid,
     };
 
     let info = AllocationInfo {

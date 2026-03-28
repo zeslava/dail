@@ -132,7 +132,7 @@ pub fn print_table(jails: &[&JailState]) {
             String::new()
         } else {
             jail.config.ports.iter()
-                .map(|p| format!("{}->{}:{}/{}", p.host_port, jail.name(), p.jail_port, p.proto))
+                .map(|p| format!("{}->{}/{}", p.host_port, p.jail_port, p.proto))
                 .collect::<Vec<_>>()
                 .join(", ")
         };

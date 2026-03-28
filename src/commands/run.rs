@@ -109,6 +109,10 @@ pub struct RunArgs {
     /// Publish port: [host_ip:]host_port:jail_port[/proto]
     #[arg(short = 'p', long = "publish")]
     pub publish: Vec<String>,
+
+    /// UID for the service user created by SERVICE directive
+    #[arg(long)]
+    pub uid: Option<u32>,
 }
 
 
@@ -173,6 +177,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         network: args.network.as_deref(),
         publish: &args.publish,
         envs: &args.envs,
+        uid: args.uid,
     };
 
     let flags = ConfigFlags {

@@ -96,6 +96,9 @@ impl BuildExecutor {
             jail_config.auto_remove = cli.auto_remove;
             jail_config.ports.extend(cli.ports.iter().cloned());
             jail_config.env.extend(cli.env.iter().map(|(k, v)| (k.clone(), v.clone())));
+            if cli.service_uid.is_some() {
+                jail_config.service_uid = cli.service_uid;
+            }
         }
 
         tracing::info!(
@@ -104,6 +107,7 @@ impl BuildExecutor {
             jail_config.persist
         );
         let jail_config_log_file = jail_config.log_file.clone();
+        let jail_config_service_uid = jail_config.service_uid;
         tracing::info!("Creating jail '{}'", name);
         lifecycle.create(jail_config)?;
         tracing::info!("Jail '{}' created", name);
@@ -229,9 +233,17 @@ impl BuildExecutor {
 
                             if *create_user {
                                 tracing::info!("SERVICE {}: creating user/group/dirs", svc);
+                                let uid_flag = match jail_config_service_uid {
+                                    Some(uid) => format!(" -u {uid} -g {uid}"),
+                                    None => format!(" -g {svc}"),
+                                };
+                                let gid_flag = match jail_config_service_uid {
+                                    Some(gid) => format!(" -g {gid}"),
+                                    None => String::new(),
+                                };
                                 let setup_script = format!(
-                                    "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc} && \
-                                     pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc} -g {svc} -m -s /usr/sbin/nologin && \
+                                    "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
+                                     pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc}{uid_flag} -m -s /usr/sbin/nologin && \
                                      mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
                                      chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc}"
                                 );
