@@ -352,6 +352,7 @@ stop_cmd="${{name}}_stop"
     if [ -f "/var/run/dail/{svc}.env" ]; then
         . "/var/run/dail/{svc}.env"
     fi
+    touch "{svc_log}" && chmod 644 "{svc_log}"
     /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "{svc_log}" "${{command}}" ${{command_args}}
 }}
 
