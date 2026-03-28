@@ -14,7 +14,6 @@ pub struct CommonJailArgs<'a> {
     pub vnet_ip: Option<&'a str>,
     pub vnet_gateway: Option<&'a str>,
     pub mounts: &'a [String],
-    pub mounts_ro: &'a [String],
     pub hostname: Option<&'a str>,
     pub allows: &'a [String],
     pub limits: &'a [String],
@@ -166,24 +165,18 @@ pub fn build_jail_config(
     // Parse mounts
     let mut mounts = Vec::new();
     for m in common.mounts {
-        let (src, dst) = m
+        let (spec, readonly) = if m.ends_with(":ro") {
+            (&m[..m.len() - 3], true)
+        } else {
+            (m.as_str(), false)
+        };
+        let (src, dst) = spec
             .split_once(':')
             .ok_or_else(|| anyhow::anyhow!("invalid mount spec: {m}"))?;
         mounts.push(MountSpec {
             source: src.into(),
             destination: dst.into(),
-            readonly: false,
-            fs_type: "nullfs".to_string(),
-        });
-    }
-    for m in common.mounts_ro {
-        let (src, dst) = m
-            .split_once(':')
-            .ok_or_else(|| anyhow::anyhow!("invalid mount spec: {m}"))?;
-        mounts.push(MountSpec {
-            source: src.into(),
-            destination: dst.into(),
-            readonly: true,
+            readonly,
             fs_type: "nullfs".to_string(),
         });
     }

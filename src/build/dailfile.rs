@@ -122,11 +122,14 @@ impl Dailfile {
                     }
                 }
                 "MOUNT" => {
-                    let readonly = rest.starts_with("ro:");
-                    let spec = if readonly { &rest[3..] } else { rest };
+                    let (spec, readonly) = if rest.ends_with(":ro") {
+                        (&rest[..rest.len() - 3], true)
+                    } else {
+                        (rest, false)
+                    };
                     let (src, dst) = spec.split_once(':').ok_or_else(|| {
                         DailError::Build(format!(
-                            "line {}: MOUNT requires <src>:<dst>",
+                            "line {}: MOUNT requires <src>:<dst>[:<ro>]",
                             line_num + 1
                         ))
                     })?;

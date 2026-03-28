@@ -58,13 +58,9 @@ pub struct RunArgs {
     #[arg(long)]
     pub vnet_gateway: Option<String>,
 
-    /// nullfs mount (host:jail)
+    /// nullfs mount (host:jail[:ro])
     #[arg(short = 'm', long = "mount")]
     pub mounts: Vec<String>,
-
-    /// Read-only nullfs mount (host:jail)
-    #[arg(long = "mount-ro")]
-    pub mounts_ro: Vec<String>,
 
     /// Environment variable (KEY=VALUE)
     #[arg(short = 'e', long = "env")]
@@ -168,7 +164,6 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         vnet_ip: args.vnet_ip.as_deref(),
         vnet_gateway: args.vnet_gateway.as_deref(),
         mounts: &args.mounts,
-        mounts_ro: &args.mounts_ro,
         hostname: args.hostname.as_deref(),
         allows: &args.allows,
         limits: &args.limits,

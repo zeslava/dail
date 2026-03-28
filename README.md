@@ -144,7 +144,7 @@ PARAM allow.raw_sockets=true
 
 # Mount host directories into the jail
 MOUNT /home/user/site:/usr/local/www
-MOUNT ro:/data:/mnt/data
+MOUNT /data:/mnt/data:ro
 
 # Enable a service (creates user/group/dirs, adds to rc.conf)
 SERVICE nginx --no-user
@@ -167,7 +167,7 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 | `COPY` | `COPY [--chown=u:g] <src> <dst>` | Copy files into jail (supports globs). Auto-chown to SERVICE user if present |
 | `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
 | `PARAM` | `PARAM <key>=<value>` | Set jail parameter (see [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))) |
-| `MOUNT` | `MOUNT [ro:]<src>:<dst>` | Mount host directory (optional `ro:` prefix) |
+| `MOUNT` | `MOUNT <src>:<dst>[:ro]` | Mount host directory (optional `:ro` suffix) |
 | `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs, set persist |
 | `LOG` | `LOG <path>` | Log file for `dail logs` |
 | `EXPOSE` | `EXPOSE [host:]<port>[/proto]` | Port forwarding (default tcp, overridden by `-p`) |
