@@ -134,6 +134,7 @@ dail create myjail --preset postgres                        # apply preset
 dail create web --vnet --vnet-ip 10.0.0.5/24 --vnet-gateway 10.0.0.1
 dail create app --mount /data/app:/app --allow raw_sockets --limit maxproc=256
 dail create web -p 8080:80                                  # port forwarding via PF
+dail create app --uid 1001                                   # service user with specific UID/GID
 ```
 
 **`dail run`** — Create and start a jail in one step. Same options as `create`, plus `--rm`, `--build`, `--rebuild`.
@@ -151,6 +152,7 @@ dail run https://github.com/user/repo.git --name app        # build from git rep
 dail run https://github.com/user/repo//jails/web --name web # build from subdirectory
 dail run web -p 8080:80                                     # port forwarding
 dail run web -p 8080:80/tcp -p 5432:5432                    # multiple ports
+dail run app.dail --uid 1001                                 # service user with specific UID/GID
 ```
 
 **`dail start`** / **`stop`** / **`restart`** — Manage jail state.
