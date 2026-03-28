@@ -187,7 +187,8 @@ impl BuildExecutor {
                         "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
                          pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc}{uid_flag} -m -s /usr/sbin/nologin && \
                          mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
-                         chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc}"
+                         chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
+                         chmod 755 /var/log/{svc}"
                     );
                     let status = lifecycle.exec(name, &["/bin/sh", "-c", &setup_script])?;
                     if !status.success() {
