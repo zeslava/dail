@@ -187,39 +187,79 @@ impl BuildExecutor {
                             let jail_state = lifecycle
                                 .get(name)
                                 .ok_or_else(|| DailError::Build("jail not found".into()))?;
-                            let dst = jail_state.root_path.join(
+                            let dst_base = jail_state.root_path.join(
                                 destination
                                     .strip_prefix("/")
                                     .unwrap_or(destination.as_str()),
                             );
-                            if let Some(parent) = dst.parent() {
-                                std::fs::create_dir_all(parent)?;
-                            }
-                            let src_raw = std::path::Path::new(source.as_str());
-                            let src = if src_raw.is_relative() {
-                                context_dir.join(src_raw)
-                            } else {
-                                src_raw.to_path_buf()
-                            };
-                            let src = src.as_path();
-                            if !src.exists() {
-                                return Err(DailError::Build(format!(
-                                    "COPY failed: source not found: {}",
-                                    src.display()
-                                )));
-                            }
-                            if src.is_dir() {
-                                let status = std::process::Command::new("cp")
-                                    .arg("-a")
-                                    .arg(src)
-                                    .arg(&dst)
-                                    .status()
-                                    .map_err(|e| DailError::Build(format!("cp failed: {e}")))?;
-                                if !status.success() {
-                                    return Err(DailError::Build("COPY directory failed".into()));
+
+                            let is_glob = source.contains('*') || source.contains('?') || source.contains('[');
+                            if is_glob {
+                                let pattern = if std::path::Path::new(source.as_str()).is_relative() {
+                                    context_dir.join(source.as_str()).to_string_lossy().to_string()
+                                } else {
+                                    source.clone()
+                                };
+                                let entries: Vec<_> = glob::glob(&pattern)
+                                    .map_err(|e| DailError::Build(format!("COPY invalid glob: {e}")))?
+                                    .collect::<Result<Vec<_>, _>>()
+                                    .map_err(|e| DailError::Build(format!("COPY glob error: {e}")))?;
+                                if entries.is_empty() {
+                                    return Err(DailError::Build(format!(
+                                        "COPY failed: no files match pattern: {source}"
+                                    )));
+                                }
+                                std::fs::create_dir_all(&dst_base)?;
+                                for entry in &entries {
+                                    let file_name = entry.file_name().ok_or_else(|| {
+                                        DailError::Build(format!("COPY: invalid path: {}", entry.display()))
+                                    })?;
+                                    let dst = dst_base.join(file_name);
+                                    if entry.is_dir() {
+                                        let status = std::process::Command::new("cp")
+                                            .arg("-a")
+                                            .arg(entry)
+                                            .arg(&dst)
+                                            .status()
+                                            .map_err(|e| DailError::Build(format!("cp failed: {e}")))?;
+                                        if !status.success() {
+                                            return Err(DailError::Build("COPY directory failed".into()));
+                                        }
+                                    } else {
+                                        std::fs::copy(entry, &dst)?;
+                                    }
+                                    tracing::info!("  copied: {}", entry.display());
                                 }
                             } else {
-                                std::fs::copy(src, &dst)?;
+                                if let Some(parent) = dst_base.parent() {
+                                    std::fs::create_dir_all(parent)?;
+                                }
+                                let src_raw = std::path::Path::new(source.as_str());
+                                let src = if src_raw.is_relative() {
+                                    context_dir.join(src_raw)
+                                } else {
+                                    src_raw.to_path_buf()
+                                };
+                                let src = src.as_path();
+                                if !src.exists() {
+                                    return Err(DailError::Build(format!(
+                                        "COPY failed: source not found: {}",
+                                        src.display()
+                                    )));
+                                }
+                                if src.is_dir() {
+                                    let status = std::process::Command::new("cp")
+                                        .arg("-a")
+                                        .arg(src)
+                                        .arg(&dst_base)
+                                        .status()
+                                        .map_err(|e| DailError::Build(format!("cp failed: {e}")))?;
+                                    if !status.success() {
+                                        return Err(DailError::Build("COPY directory failed".into()));
+                                    }
+                                } else {
+                                    std::fs::copy(src, &dst_base)?;
+                                }
                             }
                         }
                         Instruction::Env { .. } => {
