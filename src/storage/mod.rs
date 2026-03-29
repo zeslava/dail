@@ -52,8 +52,8 @@ pub fn freebsd_arch() -> String {
 }
 
 pub fn get_backend(config: &GlobalConfig) -> Box<dyn StorageBackend> {
-    match config.storage_backend.as_str() {
-        "zfs" => Box::new(zfs_backend::ZfsBackend),
-        _ => Box::new(directory::DirectoryBackend),
+    match config.storage_backend {
+        crate::jail::config::StorageKind::Zfs => Box::new(zfs_backend::ZfsBackend),
+        crate::jail::config::StorageKind::Directory => Box::new(directory::DirectoryBackend),
     }
 }

@@ -109,8 +109,9 @@ impl BuildExecutor {
         }
 
         tracing::info!(
-            "Jail config prepared: base={:?}, type=thick, persist={}",
+            "Jail config prepared: base={:?}, type={:?}, persist={}",
             jail_config.base,
+            jail_config.jail_type,
             jail_config.persist
         );
         let jail_config_log_file = jail_config.log_file.clone();

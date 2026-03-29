@@ -178,7 +178,7 @@ fn print_top(args: &TopArgs) -> anyhow::Result<()> {
             "-".to_string()
         };
 
-        let disk = if global.storage_backend == "zfs" {
+        let disk = if global.storage_backend == crate::jail::config::StorageKind::Zfs {
             if let Ok(pool) = global.zfs_pool.as_deref().ok_or(()) {
                 let dataset = format!("{pool}/dail/jails/{}", jail.name());
                 Zfs::get_property(&dataset, "used")

@@ -12,7 +12,7 @@ pub struct GlobalConfig {
     pub root_dir: PathBuf,
 
     #[serde(default = "default_storage_backend")]
-    pub storage_backend: String,
+    pub storage_backend: StorageKind,
 
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub zfs_pool: Option<String>,
@@ -41,8 +41,24 @@ fn default_config_dir() -> PathBuf {
     PathBuf::from("/usr/local/etc/dail")
 }
 
-fn default_storage_backend() -> String {
-    "zfs".to_string()
+fn default_storage_backend() -> StorageKind {
+    StorageKind::Zfs
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StorageKind {
+    Zfs,
+    Directory,
+}
+
+impl std::fmt::Display for StorageKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            StorageKind::Zfs => write!(f, "zfs"),
+            StorageKind::Directory => write!(f, "directory"),
+        }
+    }
 }
 
 fn default_alias_interface() -> String {
