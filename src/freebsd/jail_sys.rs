@@ -69,6 +69,7 @@ impl JailSys {
         if params.persist {
             args.push("persist".to_string());
         }
+        args.push("exec.stop=".to_string());
         args.push("meta=dail".to_string());
         for (k, v) in &params.extra {
             args.push(format!("{k}={v}"));
