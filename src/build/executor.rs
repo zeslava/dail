@@ -18,7 +18,7 @@ impl BuildExecutor {
         let mut jail_config = JailConfig::new(name.to_string());
         jail_config.jail_type = cli_config
             .map(|c| c.jail_type.clone())
-            .unwrap_or(crate::jail::config::JailType::Thick);
+            .unwrap_or_default();
 
         let has_cli_ports = cli_config.map_or(false, |c| !c.ports.is_empty());
 
