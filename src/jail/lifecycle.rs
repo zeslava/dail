@@ -399,8 +399,8 @@ impl JailLifecycle {
             let _ = NullfsMount::force_unmount(&devfs);
         }
 
-        // Unmount thin jail skeleton + base (directory backend only)
-        if jail_type == JailType::Thin && self.config.storage_backend != "zfs" {
+        // Unmount thin jail skeleton + base
+        if jail_type == JailType::Thin {
             for dir in &["root", "tmp", "var", "etc"] {
                 let _ = NullfsMount::force_unmount(&root_path.join(dir));
             }
