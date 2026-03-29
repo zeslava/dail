@@ -17,7 +17,7 @@ impl Zfs {
     /// Destroy a ZFS dataset.
     pub fn destroy_dataset(name: &str, recursive: bool) -> Result<(), ZfsError> {
         if recursive {
-            run_zfs(&["destroy", "-r", name])
+            run_zfs(&["destroy", "-rf", name])
         } else {
             run_zfs(&["destroy", name])
         }
