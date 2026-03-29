@@ -175,23 +175,23 @@ impl JailLifecycle {
             }
 
             // Directory backend: mount base read-only, then skeleton writable on top
-            // ZFS backend: base is already a clone in root/, only skeleton needed
+            // ZFS backend: clone is already writable, no mounts needed
             if self.config.storage_backend != StorageKind::Zfs {
                 let base_dir = {
                     let backend = storage::get_backend(&self.config);
                     backend.check_base(&self.config, state.config.base.as_deref().unwrap())?
                 };
                 NullfsMount::mount(&base_dir, &state.root_path, true)?;
-            }
 
-            let jail_dir = self.config.jails_dir().join(state.name());
-            let skeleton_dir = jail_dir.join("skeleton");
-            for dir in &["etc", "var", "tmp", "root"] {
-                let src = skeleton_dir.join(dir);
-                let dst = state.root_path.join(dir);
-                std::fs::create_dir_all(&src)?;
-                std::fs::create_dir_all(&dst)?;
-                NullfsMount::mount(&src, &dst, false)?;
+                let jail_dir = self.config.jails_dir().join(state.name());
+                let skeleton_dir = jail_dir.join("skeleton");
+                for dir in &["etc", "var", "tmp", "root"] {
+                    let src = skeleton_dir.join(dir);
+                    let dst = state.root_path.join(dir);
+                    std::fs::create_dir_all(&src)?;
+                    std::fs::create_dir_all(&dst)?;
+                    NullfsMount::mount(&src, &dst, false)?;
+                }
             }
         }
 
@@ -333,19 +333,16 @@ impl JailLifecycle {
             }
         }
 
-        // Unmount thin jail skeleton + base
-        if state.config.jail_type == JailType::Thin {
+        // Unmount thin jail skeleton + base (directory backend only)
+        if state.config.jail_type == JailType::Thin && self.config.storage_backend != StorageKind::Zfs {
             for dir in &["root", "tmp", "var", "etc"] {
                 let dst = state.root_path.join(dir);
                 if let Err(e) = NullfsMount::force_unmount(&dst) {
                     tracing::debug!("Failed to unmount {}: {}", dst.display(), e);
                 }
             }
-            // Only unmount base for directory backend (ZFS uses clone, not nullfs)
-            if self.config.storage_backend != StorageKind::Zfs {
-                if let Err(e) = NullfsMount::force_unmount(&state.root_path) {
-                    tracing::debug!("Failed to unmount jail root: {}", e);
-                }
+            if let Err(e) = NullfsMount::force_unmount(&state.root_path) {
+                tracing::debug!("Failed to unmount jail root: {}", e);
             }
         }
 
@@ -410,15 +407,12 @@ impl JailLifecycle {
             let _ = NullfsMount::force_unmount(&devfs);
         }
 
-        // Unmount thin jail skeleton + base
-        if jail_type == JailType::Thin {
+        // Unmount thin jail skeleton + base (directory backend only)
+        if jail_type == JailType::Thin && self.config.storage_backend != StorageKind::Zfs {
             for dir in &["root", "tmp", "var", "etc"] {
                 let _ = NullfsMount::force_unmount(&root_path.join(dir));
             }
-            // Only unmount base for directory backend (ZFS uses clone, not nullfs)
-            if self.config.storage_backend != StorageKind::Zfs {
-                let _ = NullfsMount::force_unmount(&root_path);
-            }
+            let _ = NullfsMount::force_unmount(&root_path);
         }
 
         let auto_remove = self
