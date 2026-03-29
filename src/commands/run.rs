@@ -66,6 +66,10 @@ pub struct RunArgs {
     #[arg(short = 'e', long = "env")]
     pub envs: Vec<String>,
 
+    /// Read env vars from file (KEY=VALUE per line, # comments)
+    #[arg(long = "env-file")]
+    pub env_files: Vec<String>,
+
     /// Hostname
     #[arg(long)]
     pub hostname: Option<String>,
@@ -172,6 +176,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         network: args.network.as_deref(),
         publish: &args.publish,
         envs: &args.envs,
+        env_files: &args.env_files,
         uid: args.uid,
     };
 

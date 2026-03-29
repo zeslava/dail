@@ -273,7 +273,7 @@ impl JailLifecycle {
 
         // 8. Write env file for rc.d scripts
         if !state.config.env.is_empty() {
-            let env_dir = state.root_path.join("var/run/dail");
+            let env_dir = state.root_path.join("usr/local/etc/dail");
             std::fs::create_dir_all(&env_dir)?;
             let env_path = env_dir.join(format!("{}.env", state.config.name));
             let content: String = state

@@ -22,6 +22,7 @@ pub struct CommonJailArgs<'a> {
     pub network: Option<&'a str>,
     pub publish: &'a [String],
     pub envs: &'a [String],
+    pub env_files: &'a [String],
     pub uid: Option<u32>,
 }
 
@@ -220,8 +221,22 @@ pub fn build_jail_config(
         ports.push(PortMapping::parse(p)?);
     }
 
-    // Parse env vars
+    // Parse env: env-file first, then -e overrides
     let mut env = std::collections::HashMap::new();
+    for path in common.env_files {
+        let content = std::fs::read_to_string(path)
+            .map_err(|e| anyhow::anyhow!("failed to read env file {path}: {e}"))?;
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with('#') {
+                continue;
+            }
+            let (k, v) = line
+                .split_once('=')
+                .ok_or_else(|| anyhow::anyhow!("invalid line in {path}: {line}"))?;
+            env.insert(k.trim().to_string(), v.trim().to_string());
+        }
+    }
     for e in common.envs {
         let (k, v) = e
             .split_once('=')

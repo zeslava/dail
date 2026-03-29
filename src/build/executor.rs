@@ -185,9 +185,9 @@ impl BuildExecutor {
                     };
                     let setup_script = format!(
                         "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
-                         pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /var/lib/{svc}{uid_flag} -m -s /usr/sbin/nologin && \
-                         mkdir -p /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
-                         chown {svc}:{svc} /var/log/{svc} /var/run/{svc} /var/lib/{svc} && \
+                         pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /nonexistent{uid_flag} -s /usr/sbin/nologin && \
+                         mkdir -p /var/log/{svc} && \
+                         chown {svc}:{svc} /var/log/{svc} && \
                          chmod 755 /var/log/{svc}"
                     );
                     let status = lifecycle.exec(name, &["/bin/sh", "-c", &setup_script])?;
@@ -349,8 +349,9 @@ stop_cmd="${{name}}_stop"
 
 {svc}_start()
 {{
-    if [ -f "/var/run/dail/{svc}.env" ]; then
-        . "/var/run/dail/{svc}.env"
+    mkdir -p /var/run/{svc} && chown ${{{svc}_user}} /var/run/{svc}
+    if [ -f "/usr/local/etc/dail/{svc}.env" ]; then
+        . "/usr/local/etc/dail/{svc}.env"
     fi
     touch "{svc_log}" && chmod 644 "{svc_log}"
     /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "{svc_log}" "${{command}}" ${{command_args}}
