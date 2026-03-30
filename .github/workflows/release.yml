@@ -33,7 +33,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "dail ${{ github.ref_name }}" \
-            --generate-notes \
-            dail-freebsd-amd64
+          if gh release view "${{ github.ref_name }}" > /dev/null 2>&1; then
+            echo "Release already exists. Uploading assets to existing release."
+            gh release upload "${{ github.ref_name }}" \
+              dail-freebsd-amd64 --clobber
+          else
+            gh release create "${{ github.ref_name }}" \
+              --title "dail ${{ github.ref_name }}" \
+              --generate-notes \
+              dail-freebsd-amd64
+          fi
