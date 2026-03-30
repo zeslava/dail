@@ -19,6 +19,8 @@ jobs:
         with:
           release: "14.2"
           usesh: true
+          prepare: |
+            pkg install -y curl
           run: |
             set -e
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
