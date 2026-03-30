@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.2] - 2026-03-30
 
 ### Added
 - Publish pre-built `dail-freebsd-amd64` binary to GitHub Releases on every `v*` tag push
