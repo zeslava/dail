@@ -38,7 +38,7 @@ pub struct RunArgs {
     #[arg(long, default_value = "thin", add = ArgValueCompleter::new(completions::complete_jail_type))]
     pub r#type: String,
 
-    /// IP alias (e.g. 10.0.0.5/24)
+    /// IP alias (e.g. 10.0.0.5 or 10.0.0.5/24 — mask is inherited from the pool if omitted)
     #[arg(long)]
     pub ip: Option<String>,
 

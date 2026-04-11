@@ -128,10 +128,25 @@ pub fn build_jail_config(
             gateway: common.vnet_gateway.map(|s| s.to_string()),
         }
     } else if let Some(ip) = common.ip {
-        // Check for IP conflicts before creating the jail
-        check_ip_conflict(ip, global)?;
+        // If mask is omitted, inherit prefix length from the pool.
+        let normalized = if ip.contains('/') {
+            ip.to_string()
+        } else {
+            let prefix = global
+                .ip_pool
+                .split_once('/')
+                .map(|(_, p)| p)
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "ip_pool {} has no prefix; pass --ip with explicit mask (e.g. {ip}/24)",
+                        global.ip_pool
+                    )
+                })?;
+            format!("{ip}/{prefix}")
+        };
+        check_ip_conflict(&normalized, global)?;
         NetworkConfig::Alias {
-            ip: ip.to_string(),
+            ip: normalized,
             interface: global.alias_interface.clone(),
         }
     } else {
