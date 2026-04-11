@@ -5,7 +5,7 @@ PARAM persist=true
 
 RUN pkg install -y valkey-9.0.1
 
-SERVICE valkey --no-user
+SERVICE valkey /usr/local/bin/valkey-server --no-user
 LOG /var/log/valkey/valkey.log
 
 # Mount host data directory for persistence
