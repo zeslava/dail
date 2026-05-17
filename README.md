@@ -133,6 +133,9 @@ FROM 15.0-RELEASE
 # Install packages
 RUN pkg install -y nginx
 
+# Set working directory for subsequent RUN/CMD
+WORKDIR /usr/local/www
+
 # Copy config files from build context into the jail
 COPY nginx.conf /usr/local/etc/nginx/nginx.conf
 
@@ -164,6 +167,7 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 |-----------|--------|-------------|
 | `FROM` | `FROM <release>` | FreeBSD base release |
 | `RUN` | `RUN <command>` | Execute command during build |
+| `WORKDIR` | `WORKDIR <path>` | Working directory for subsequent `RUN` and `CMD` |
 | `COPY` | `COPY [--chown=u:g] <src> <dst>` | Copy files into jail (supports globs). Auto-chown to SERVICE user if present |
 | `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
 | `PARAM` | `PARAM <key>=<value>` | Set jail parameter (see [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))) |
@@ -237,6 +241,7 @@ dail run https://github.com/user/repo//jails/web --name web # build from subdire
 dail run web -p 8080:80                                     # port forwarding
 dail run web -p 8080:80/tcp -p 5432:5432                    # multiple ports
 dail run app.dail --uid 1001                                 # service user with specific UID/GID
+dail run app.dail -w /app                                    # working dir for RUN/CMD (overrides WORKDIR)
 ```
 
 **`dail start`** / **`stop`** / **`restart`** — Manage jail state.
