@@ -113,6 +113,10 @@ pub struct RunArgs {
     /// UID for the service user created by SERVICE directive
     #[arg(long)]
     pub uid: Option<u32>,
+
+    /// Run in foreground: stream CMD output, exit with CMD's exit code
+    #[arg(long)]
+    pub wait: bool,
 }
 
 
@@ -279,9 +283,33 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         }
     }
 
+    if args.wait {
+        let exit_code = match lifecycle.start_foreground(&jail_name) {
+            Ok(code) => code,
+            Err(e) => {
+                tracing::warn!("start failed, attempting to clean up jail '{}'", jail_name);
+                match lifecycle.remove(&jail_name, true) {
+                    Ok(()) => {}
+                    Err(cleanup_err) => {
+                        tracing::error!(
+                            "Failed to clean up jail '{}' after failed start (may need manual cleanup): {}",
+                            jail_name,
+                            cleanup_err
+                        );
+                    }
+                }
+                return Err(e.into());
+            }
+        };
+        // Stop the jail after CMD exits (stop() will auto-remove if --rm was set)
+        if let Err(e) = lifecycle.stop(&jail_name) {
+            tracing::warn!("failed to stop jail '{}' after CMD exited: {}", jail_name, e);
+        }
+        std::process::exit(exit_code);
+    }
+
     if let Err(e) = lifecycle.start(&jail_name) {
         tracing::warn!("start failed, attempting to clean up jail '{}'", jail_name);
-        // Use force=true to ensure we stop and remove the jail regardless of state
         match lifecycle.remove(&jail_name, true) {
             Ok(()) => {
                 tracing::info!(

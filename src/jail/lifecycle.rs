@@ -76,6 +76,71 @@ impl JailLifecycle {
     }
 
     pub fn start(&mut self, name: &str) -> Result<&JailState, DailError> {
+        let state = self.validate_and_clone_for_start(name)?;
+
+        match self.start_inner(&state) {
+            Ok((jid, epair)) => {
+                self.store.update(name, |s| {
+                    s.status = JailStatus::Running;
+                    s.jid = Some(jid);
+                    s.epair = epair;
+                    s.started_at = Some(chrono::Utc::now());
+                })?;
+                if let Some(ref cmd) = state.config.cmd {
+                    let log_path = self.cmd_log_path(&state);
+                    if let Err(e) = JailSys::exec_logged(&state.config.name, cmd, &log_path, &state.config.env) {
+                        tracing::error!("Failed to launch CMD for jail '{}': {}", state.name(), e);
+                        self.cleanup_failed_start(&state);
+                        return Err(DailError::Other(e.to_string()));
+                    }
+                }
+                // SAFETY: just updated via store.update() above
+                Ok(self.store.get(name).unwrap())
+            }
+            Err(e) => {
+                tracing::error!("Failed to start jail '{}': {}", state.name(), e);
+                tracing::debug!(
+                    "Attempting cleanup after failed start for jail '{}'",
+                    state.name()
+                );
+                self.cleanup_failed_start(&state);
+                Err(e)
+            }
+        }
+    }
+
+    /// Start the jail and run CMD in foreground with inherited stdout/stderr.
+    /// Blocks until CMD exits and returns its exit code (128+N for signals, -1 if unknown).
+    pub fn start_foreground(&mut self, name: &str) -> Result<i32, DailError> {
+        let state = self.validate_and_clone_for_start(name)?;
+
+        match self.start_inner(&state) {
+            Ok((jid, epair)) => {
+                self.store.update(name, |s| {
+                    s.status = JailStatus::Running;
+                    s.jid = Some(jid);
+                    s.epair = epair;
+                    s.started_at = Some(chrono::Utc::now());
+                })?;
+                if let Some(ref cmd) = state.config.cmd {
+                    let status = JailSys::exec_foreground(
+                        &state.config.name,
+                        cmd,
+                        &state.config.env,
+                    )?;
+                    return Ok(exit_code_from_status(status));
+                }
+                Ok(0)
+            }
+            Err(e) => {
+                tracing::error!("Failed to start jail '{}': {}", state.name(), e);
+                self.cleanup_failed_start(&state);
+                Err(e)
+            }
+        }
+    }
+
+    fn validate_and_clone_for_start(&self, name: &str) -> Result<JailState, DailError> {
         let state = self
             .store
             .get(name)
@@ -89,7 +154,6 @@ impl JailLifecycle {
             });
         }
 
-        // Validate before starting
         if !state.root_path.exists() {
             return Err(DailError::Storage(format!(
                 "jail root path does not exist: {}",
@@ -105,28 +169,15 @@ impl JailLifecycle {
             }
         }
 
-        let state = state.clone();
+        Ok(state.clone())
+    }
 
-        match self.start_inner(&state) {
-            Ok((jid, epair)) => {
-                self.store.update(name, |s| {
-                    s.status = JailStatus::Running;
-                    s.jid = Some(jid);
-                    s.epair = epair;
-                    s.started_at = Some(chrono::Utc::now());
-                })?;
-                // SAFETY: just updated via store.update() above
-                Ok(self.store.get(name).unwrap())
-            }
-            Err(e) => {
-                tracing::error!("Failed to start jail '{}': {}", state.name(), e);
-                tracing::debug!(
-                    "Attempting cleanup after failed start for jail '{}'",
-                    state.name()
-                );
-                self.cleanup_failed_start(&state);
-                Err(e)
-            }
+    fn cmd_log_path(&self, state: &JailState) -> std::path::PathBuf {
+        if let Some(ref log_file) = state.config.log_file {
+            let rel = log_file.strip_prefix('/').unwrap_or(log_file);
+            state.root_path.join(rel)
+        } else {
+            self.config.jails_dir().join(state.name()).join("cmd.log")
         }
     }
 
@@ -292,17 +343,6 @@ impl JailLifecycle {
                 .collect::<Vec<_>>()
                 .join("\n");
             std::fs::write(&env_path, content + "\n")?;
-        }
-
-        // 9. Run CMD if configured
-        if let Some(ref cmd) = state.config.cmd {
-            let log_path = if let Some(ref log_file) = state.config.log_file {
-                let rel = log_file.strip_prefix('/').unwrap_or(log_file);
-                state.root_path.join(rel)
-            } else {
-                self.config.jails_dir().join(state.name()).join("cmd.log")
-            };
-            JailSys::exec_logged(&state.config.name, cmd, &log_path, &state.config.env)?;
         }
 
         Ok((jid, epair))
@@ -510,5 +550,16 @@ impl JailLifecycle {
         }
 
         Ok(JailSys::console(name, shell)?)
+    }
+}
+
+fn exit_code_from_status(status: std::process::ExitStatus) -> i32 {
+    use std::os::unix::process::ExitStatusExt;
+    if let Some(code) = status.code() {
+        code
+    } else if let Some(signal) = status.signal() {
+        128 + signal
+    } else {
+        -1
     }
 }

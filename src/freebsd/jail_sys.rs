@@ -184,6 +184,26 @@ impl JailSys {
         Ok(())
     }
 
+    /// Execute a command inside a jail with stdout/stderr inherited from the caller.
+    /// Blocks until the command exits and returns its ExitStatus.
+    pub fn exec_foreground(
+        name: &str,
+        cmd: &str,
+        env: &std::collections::HashMap<String, String>,
+    ) -> Result<std::process::ExitStatus, JailError> {
+        let mut args = vec!["env".to_string()];
+        for (k, v) in env {
+            args.push(format!("{k}={v}"));
+        }
+        args.extend(["/bin/sh".to_string(), "-c".to_string(), cmd.to_string()]);
+
+        let status = std::process::Command::new("jexec")
+            .arg(name)
+            .args(&args)
+            .status()?;
+        Ok(status)
+    }
+
     /// Attach an interactive console to a jail.
     pub fn console(name: &str, shell: &str) -> Result<std::process::ExitStatus, JailError> {
         let status = std::process::Command::new("jexec")
