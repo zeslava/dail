@@ -160,6 +160,7 @@ impl JailSys {
         cmd: &str,
         log_path: &std::path::Path,
         env: &std::collections::HashMap<String, String>,
+        workdir: Option<&str>,
     ) -> Result<(), JailError> {
         let log_file = std::fs::OpenOptions::new()
             .create(true)
@@ -167,11 +168,7 @@ impl JailSys {
             .open(log_path)?;
         let stderr_file = log_file.try_clone()?;
 
-        let mut args = vec!["env".to_string()];
-        for (k, v) in env {
-            args.push(format!("{k}={v}"));
-        }
-        args.extend(["/bin/sh".to_string(), "-c".to_string(), cmd.to_string()]);
+        let args = build_exec_args(cmd, env, workdir);
 
         std::process::Command::new("jexec")
             .arg(name)
@@ -190,12 +187,9 @@ impl JailSys {
         name: &str,
         cmd: &str,
         env: &std::collections::HashMap<String, String>,
+        workdir: Option<&str>,
     ) -> Result<std::process::ExitStatus, JailError> {
-        let mut args = vec!["env".to_string()];
-        for (k, v) in env {
-            args.push(format!("{k}={v}"));
-        }
-        args.extend(["/bin/sh".to_string(), "-c".to_string(), cmd.to_string()]);
+        let args = build_exec_args(cmd, env, workdir);
 
         let status = std::process::Command::new("jexec")
             .arg(name)
@@ -212,4 +206,30 @@ impl JailSys {
             .status()?;
         Ok(status)
     }
+}
+
+/// Build `jexec` arguments: `env [PATH=..] [HOME=..] KEY=VALUE.. /bin/sh -c <cmd>`.
+/// Injects default PATH/HOME unless the caller set them so toolchains in
+/// /usr/local/bin and ~/.cargo/bin resolve. Wraps cmd in `cd <workdir>` if set.
+fn build_exec_args(
+    cmd: &str,
+    env: &std::collections::HashMap<String, String>,
+    workdir: Option<&str>,
+) -> Vec<String> {
+    let mut args = vec!["env".to_string()];
+    if !env.contains_key("PATH") {
+        args.push("PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin".to_string());
+    }
+    if !env.contains_key("HOME") {
+        args.push("HOME=/root".to_string());
+    }
+    for (k, v) in env {
+        args.push(format!("{k}={v}"));
+    }
+    let script = match workdir {
+        Some(wd) => format!("cd '{}' && {{ {cmd}; }}", wd.replace('\'', "'\\''")),
+        None => cmd.to_string(),
+    };
+    args.extend(["/bin/sh".to_string(), "-c".to_string(), script]);
+    args
 }

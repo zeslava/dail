@@ -30,6 +30,9 @@ pub enum Instruction {
     Cmd {
         command: String,
     },
+    Workdir {
+        path: String,
+    },
     Log {
         path: String,
     },
@@ -141,6 +144,9 @@ impl Dailfile {
                 }
                 "CMD" => Instruction::Cmd {
                     command: rest.to_string(),
+                },
+                "WORKDIR" => Instruction::Workdir {
+                    path: rest.to_string(),
                 },
                 "LOG" => Instruction::Log {
                     path: rest.to_string(),

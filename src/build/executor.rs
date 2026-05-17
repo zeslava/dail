@@ -54,6 +54,9 @@ impl BuildExecutor {
                 Instruction::Cmd { command } => {
                     jail_config.cmd = Some(command.clone());
                 }
+                Instruction::Workdir { path } => {
+                    jail_config.workdir = Some(path.clone());
+                }
                 Instruction::Log { path } => {
                     jail_config.log_file = Some(path.clone());
                 }
@@ -105,6 +108,9 @@ impl BuildExecutor {
             jail_config.env.extend(cli.env.iter().map(|(k, v)| (k.clone(), v.clone())));
             if cli.service_uid.is_some() {
                 jail_config.service_uid = cli.service_uid;
+            }
+            if cli.workdir.is_some() {
+                jail_config.workdir = cli.workdir.clone();
             }
         }
 
@@ -202,12 +208,24 @@ impl BuildExecutor {
             }
 
             tracing::info!("Starting build instructions execution");
+            let mut current_workdir: Option<String> =
+                cli_config.and_then(|c| c.workdir.clone());
             let exec_result = (|| -> Result<(), DailError> {
                 for instruction in &dailfile.instructions {
                     match instruction {
+                        Instruction::Workdir { path } => {
+                            current_workdir = Some(path.clone());
+                        }
                         Instruction::Run { command } => {
                             tracing::info!("RUN {}", command);
-                            let status = lifecycle.exec(name, &["/bin/sh", "-c", command])?;
+                            let wrapped = match &current_workdir {
+                                Some(wd) => format!(
+                                    "cd '{}' && {{ {command}; }}",
+                                    wd.replace('\'', "'\\''")
+                                ),
+                                None => command.clone(),
+                            };
+                            let status = lifecycle.exec(name, &["/bin/sh", "-c", &wrapped])?;
                             if !status.success() {
                                 return Err(DailError::Build(format!(
                                     "RUN command failed with exit code {:?}: {command}",

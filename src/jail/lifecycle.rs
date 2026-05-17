@@ -88,7 +88,13 @@ impl JailLifecycle {
                 })?;
                 if let Some(ref cmd) = state.config.cmd {
                     let log_path = self.cmd_log_path(&state);
-                    if let Err(e) = JailSys::exec_logged(&state.config.name, cmd, &log_path, &state.config.env) {
+                    if let Err(e) = JailSys::exec_logged(
+                        &state.config.name,
+                        cmd,
+                        &log_path,
+                        &state.config.env,
+                        state.config.workdir.as_deref(),
+                    ) {
                         tracing::error!("Failed to launch CMD for jail '{}': {}", state.name(), e);
                         self.cleanup_failed_start(&state);
                         return Err(DailError::Other(e.to_string()));
@@ -127,6 +133,7 @@ impl JailLifecycle {
                         &state.config.name,
                         cmd,
                         &state.config.env,
+                        state.config.workdir.as_deref(),
                     )?;
                     return Ok(exit_code_from_status(status));
                 }
@@ -265,6 +272,17 @@ impl JailLifecycle {
             );
             std::fs::create_dir_all(&target)?;
             NullfsMount::mount(&mount.source, &target, mount.readonly)?;
+        }
+
+        // 3b. Ensure DNS works: copy host resolv.conf into the jail.
+        // Needed for outbound name resolution (e.g. fetching crates) when the
+        // jail uses inherited networking.
+        let host_resolv = std::path::Path::new("/etc/resolv.conf");
+        if host_resolv.exists() {
+            let etc_dir = state.root_path.join("etc");
+            if std::fs::create_dir_all(&etc_dir).is_ok() {
+                let _ = std::fs::copy(host_resolv, etc_dir.join("resolv.conf"));
+            }
         }
 
         // 4. Build jail params and create jail

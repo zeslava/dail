@@ -113,6 +113,7 @@ pub fn run(args: CreateArgs) -> anyhow::Result<()> {
         envs: &args.envs,
         env_files: &args.env_files,
         uid: args.uid,
+        workdir: None,
     };
 
     let (config, info) =

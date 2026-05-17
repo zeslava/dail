@@ -117,6 +117,10 @@ pub struct RunArgs {
     /// Run in foreground: stream CMD output, exit with CMD's exit code
     #[arg(long)]
     pub wait: bool,
+
+    /// Working directory for RUN/CMD inside the jail
+    #[arg(short = 'w', long)]
+    pub workdir: Option<String>,
 }
 
 
@@ -182,6 +186,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
         envs: &args.envs,
         env_files: &args.env_files,
         uid: args.uid,
+        workdir: args.workdir.as_deref(),
     };
 
     let flags = ConfigFlags {

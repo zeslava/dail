@@ -287,6 +287,8 @@ pub struct JailConfig {
     pub env: HashMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub service_uid: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workdir: Option<String>,
 }
 
 impl JailConfig {
@@ -307,6 +309,7 @@ impl JailConfig {
             ports: Vec::new(),
             env: HashMap::new(),
             service_uid: None,
+            workdir: None,
         }
     }
 }
