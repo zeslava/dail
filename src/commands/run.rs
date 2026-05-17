@@ -249,6 +249,7 @@ pub fn run(mut args: RunArgs) -> anyhow::Result<()> {
             &context_dir,
         )?;
         println!("Jail '{}' built.", jail_name);
+        lifecycle.set_auto_remove(&jail_name, args.rm)?;
 
         if let Some(ip) = info.allocated_ip {
             println!("IP allocated: {} on {}", ip, global.alias_interface);

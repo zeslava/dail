@@ -172,6 +172,12 @@ impl JailLifecycle {
         Ok(state.clone())
     }
 
+    pub fn set_auto_remove(&mut self, name: &str, auto_remove: bool) -> Result<(), DailError> {
+        self.store.update(name, |s| {
+            s.config.auto_remove = auto_remove;
+        })
+    }
+
     fn cmd_log_path(&self, state: &JailState) -> std::path::PathBuf {
         if let Some(ref log_file) = state.config.log_file {
             let rel = log_file.strip_prefix('/').unwrap_or(log_file);

@@ -100,7 +100,7 @@ impl BuildExecutor {
                 jail_config.hostname = cli.hostname.clone();
             }
             jail_config.mounts.extend(cli.mounts.iter().cloned());
-            jail_config.auto_remove = cli.auto_remove;
+            // auto_remove is applied after build completes, not during build phase
             jail_config.ports.extend(cli.ports.iter().cloned());
             jail_config.env.extend(cli.env.iter().map(|(k, v)| (k.clone(), v.clone())));
             if cli.service_uid.is_some() {
