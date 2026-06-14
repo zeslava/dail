@@ -8,7 +8,7 @@ SERVICE postgresql --no-user
 LOG /var/log/postgresql.log
 
 # Initialize the database cluster
-RUN service postgresql oneinitdb
+RUN service postgresql initdb
 
 # Copy configs to listen on all interfaces
 COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
