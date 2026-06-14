@@ -40,6 +40,7 @@ pub enum Instruction {
         name: String,
         command: String,
         create_user: bool,
+        run_user: Option<String>,
     },
     Expose {
         host_port: u16,
@@ -192,6 +193,9 @@ impl Dailfile {
                         })?
                         .to_string();
                     let create_user = !parts.iter().any(|p| *p == "--no-user");
+                    let run_user = parts.iter()
+                        .find(|p| p.starts_with("--run-user="))
+                        .map(|p| p.trim_start_matches("--run-user=").to_string());
                     parts.retain(|p| !p.starts_with("--"));
                     let command = if parts.len() > 1 {
                         parts[1].to_string()
@@ -202,6 +206,7 @@ impl Dailfile {
                         name: svc_name,
                         command,
                         create_user,
+                        run_user,
                     }
                 }
                 other => {

@@ -75,14 +75,14 @@ impl BuildExecutor {
             }
         }
 
-        // Extract service name and create_user flag (order-independent)
-        let (service_name, service_create_user) = dailfile.instructions.iter().find_map(|i| {
-            if let Instruction::Service { name, create_user, .. } = i {
-                Some((Some(name.clone()), *create_user))
+        // Extract service name, create_user flag and explicit user (order-independent)
+        let (service_name, service_create_user, service_user) = dailfile.instructions.iter().find_map(|i| {
+            if let Instruction::Service { name, create_user, run_user, .. } = i {
+                Some((Some(name.clone()), *create_user, run_user.clone()))
             } else {
                 None
             }
-        }).unwrap_or((None, false));
+        }).unwrap_or((None, false, None));
 
         // SERVICE sets default CMD and persist if no explicit CMD was given
         if let Some(ref svc) = service_name {
@@ -181,20 +181,21 @@ impl BuildExecutor {
             // Create service user before instructions so COPY auto-chown works
             if let Some(ref svc) = service_name {
                 if service_create_user {
-                    tracing::info!("Creating service user/group '{}'", svc);
+                    let usr = service_user.as_deref().unwrap_or(svc.as_str());
+                    tracing::info!("Creating service user/group '{}'", usr);
                     let uid_flag = match jail_config_service_uid {
                         Some(uid) => format!(" -u {uid} -g {uid}"),
-                        None => format!(" -g {svc}"),
+                        None => format!(" -g {usr}"),
                     };
                     let gid_flag = match jail_config_service_uid {
                         Some(gid) => format!(" -g {gid}"),
                         None => String::new(),
                     };
                     let setup_script = format!(
-                        "pw groupshow {svc} >/dev/null 2>&1 || pw groupadd -n {svc}{gid_flag} && \
-                         pw usershow {svc} >/dev/null 2>&1 || pw useradd {svc} -d /nonexistent{uid_flag} -s /usr/sbin/nologin && \
+                        "pw groupshow {usr} >/dev/null 2>&1 || pw groupadd -n {usr}{gid_flag} && \
+                         pw usershow {usr} >/dev/null 2>&1 || pw useradd {usr} -d /nonexistent{uid_flag} -s /usr/sbin/nologin && \
                          mkdir -p /var/log/{svc} && \
-                         chown {svc}:{svc} /var/log/{svc} && \
+                         chown {usr}:{usr} /var/log/{svc} && \
                          chmod 755 /var/log/{svc}"
                     );
                     let status = lifecycle.exec(name, &["/bin/sh", "-c", &setup_script])?;
@@ -318,7 +319,10 @@ impl BuildExecutor {
                             }
 
                             let owner = chown.clone().or_else(|| {
-                                service_name.as_ref().map(|svc| format!("{svc}:{svc}"))
+                                service_name.as_ref().map(|svc| {
+                                    let usr = service_user.as_deref().unwrap_or(svc.as_str());
+                                    format!("{usr}:{usr}")
+                                })
                             });
                             if let Some(owner) = owner {
                                 let chown_cmd = format!("chown -R {owner} {destination}");
@@ -336,12 +340,14 @@ impl BuildExecutor {
                         Instruction::Service {
                             name: svc,
                             command: svc_command,
+                            run_user: svc_user,
                             ..
                         } => {
                             tracing::info!("SERVICE {} (command: {})", svc, svc_command);
                             // User/group creation is handled before the instruction loop
 
                             // Generate rc.d script
+                            let default_user = svc_user.as_deref().unwrap_or(svc.as_str());
                             let default_log = format!("/var/log/{svc}/{svc}.log");
                             let svc_log = jail_config_log_file
                                 .as_deref()
@@ -357,7 +363,7 @@ rcvar="{svc}_enable"
 load_rc_config $name
 
 : ${{{svc}_enable:="NO"}}
-: ${{{svc}_user:="{svc}"}}
+: ${{{svc}_user:="{default_user}"}}
 
 pidfile="/var/run/{svc}/{svc}.pid"
 command="{svc_command}"

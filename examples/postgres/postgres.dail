@@ -4,7 +4,7 @@ PARAM allow.sysvipc=true
 
 RUN pkg install -y postgresql18-server
 
-SERVICE postgresql --no-user
+SERVICE postgresql --no-user --run-user=postgres
 LOG /var/log/postgresql.log
 
 # Initialize the database cluster
