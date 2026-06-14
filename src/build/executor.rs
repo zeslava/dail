@@ -340,6 +340,7 @@ impl BuildExecutor {
                         Instruction::Service {
                             name: svc,
                             command: svc_command,
+                            command_args: svc_command_args,
                             run_user: svc_user,
                             ..
                         } => {
@@ -348,6 +349,7 @@ impl BuildExecutor {
 
                             // Generate rc.d script
                             let default_user = svc_user.as_deref().unwrap_or(svc.as_str());
+                            let args_str = svc_command_args.join(" ");
                             let default_log = format!("/var/log/{svc}/{svc}.log");
                             let svc_log = jail_config_log_file
                                 .as_deref()
@@ -367,7 +369,7 @@ load_rc_config $name
 
 pidfile="/var/run/{svc}/{svc}.pid"
 command="{svc_command}"
-command_args=""
+command_args="{args_str}"
 
 start_cmd="${{name}}_start"
 stop_cmd="${{name}}_stop"

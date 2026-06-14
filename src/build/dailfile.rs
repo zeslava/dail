@@ -39,6 +39,7 @@ pub enum Instruction {
     Service {
         name: String,
         command: String,
+        command_args: Vec<String>,
         create_user: bool,
         run_user: Option<String>,
     },
@@ -202,9 +203,15 @@ impl Dailfile {
                     } else {
                         format!("/usr/local/bin/{svc_name}")
                     };
+                    let command_args = if parts.len() > 2 {
+                        parts[2..].iter().map(|s| s.to_string()).collect()
+                    } else {
+                        vec![]
+                    };
                     Instruction::Service {
                         name: svc_name,
                         command,
+                        command_args,
                         create_user,
                         run_user,
                     }
