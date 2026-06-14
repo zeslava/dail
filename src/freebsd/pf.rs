@@ -36,7 +36,7 @@ fn check_pf_anchor() {
 }
 
 /// Write PF rdr rules into the `dail/<jail_name>` anchor.
-pub fn setup_port_forwarding(jail_name: &str, jail_ip: &str, ports: &[PortMapping]) {
+pub fn setup_port_forwarding(jail_name: &str, jail_ip: &str, ports: &[PortMapping], alias_interface: &str) {
     if ports.is_empty() {
         return;
     }
@@ -51,7 +51,7 @@ pub fn setup_port_forwarding(jail_name: &str, jail_ip: &str, ports: &[PortMappin
         let on = if let Some(ref host_ip) = p.host_ip {
             format!(" on {{ {} }}", host_ip)
         } else {
-            String::new()
+            format!(" on ! {}", alias_interface)
         };
         rules.push_str(&format!(
             "rdr pass{} proto {} from any to any port {} -> {} port {}\n",

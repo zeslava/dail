@@ -329,6 +329,7 @@ impl JailLifecycle {
                     &state.config.name,
                     ip,
                     &state.config.ports,
+                    &self.config.alias_interface,
                 );
             }
         }
