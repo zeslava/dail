@@ -11,5 +11,5 @@ LOG /var/log/postgresql.log
 RUN su -m postgres -c 'initdb -D /var/db/postgres/data18'
 
 # Copy configs to listen on all interfaces
-COPY postgresql.conf /var/db/postgres/data18/postgresql.conf
-COPY pg_hba.conf /var/db/postgres/data18/pg_hba.conf
+COPY --chown=postgres:postgres postgresql.conf /var/db/postgres/data18/postgresql.conf
+COPY --chown=postgres:postgres pg_hba.conf /var/db/postgres/data18/pg_hba.conf
