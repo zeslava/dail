@@ -64,13 +64,16 @@ fn validate_or_warn_base(base_name: &str, global: &GlobalConfig) {
 
 /// Check if an explicit IP conflicts with existing jails.
 /// Returns error if the IP is already in use.
-fn check_ip_conflict(ip: &str, global: &GlobalConfig) -> anyhow::Result<()> {
+fn check_ip_conflict(ip: &str, global: &GlobalConfig, self_name: &str) -> anyhow::Result<()> {
     let store = match DailStore::new(global) {
         Ok(s) => s,
         Err(_) => return Ok(()), // Store not initialized yet, no conflicts possible
     };
 
     for jail in store.list() {
+        if jail.config.name == self_name {
+            continue;
+        }
         if let NetworkConfig::Alias {
             ip: existing_ip, ..
         } = &jail.config.network
@@ -145,7 +148,7 @@ pub fn build_jail_config(
                 })?;
             format!("{ip}/{prefix}")
         };
-        check_ip_conflict(&normalized, global)?;
+        check_ip_conflict(&normalized, global, &name)?;
         NetworkConfig::Alias {
             ip: normalized,
             interface: global.alias_interface.clone(),
