@@ -380,7 +380,7 @@ stop_cmd="${{name}}_stop"
     if [ -f "/usr/local/etc/dail/{svc}.env" ]; then
         . "/usr/local/etc/dail/{svc}.env"
     fi
-    touch "{svc_log}" && chmod 644 "{svc_log}"
+    mkdir -p "$(dirname "{svc_log}")" && touch "{svc_log}" && chmod 644 "{svc_log}"
     /usr/sbin/daemon -f -p "${{pidfile}}" -u "${{{svc}_user}}" -o "{svc_log}" "${{command}}" ${{command_args}}
 }}
 
