@@ -183,8 +183,14 @@ impl Dailfile {
                     }
                 }
                 "SERVICE" => {
-                    let mut parts: Vec<&str> = rest.split_whitespace().collect();
-                    let svc_name = parts
+                    let tokens: Vec<&str> = rest.split_whitespace().collect();
+                    // Separator: "--" (POSIX-style) or ":" (dail-style)
+                    let sep_pos = tokens.iter().position(|p| *p == "--" || *p == ":");
+                    let (svc_tokens, cmd_tokens) = match sep_pos {
+                        Some(pos) => (&tokens[..pos], &tokens[pos + 1..]),
+                        None => (tokens.as_slice(), &[][..]),
+                    };
+                    let svc_name = svc_tokens
                         .first()
                         .ok_or_else(|| {
                             DailError::Build(format!(
@@ -193,20 +199,18 @@ impl Dailfile {
                             ))
                         })?
                         .to_string();
-                    let create_user = !parts.iter().any(|p| *p == "--no-user");
-                    let run_user = parts.iter()
+                    let create_user = !svc_tokens.iter().any(|p| *p == "--no-user");
+                    let run_user = svc_tokens
+                        .iter()
                         .find(|p| p.starts_with("--run-user="))
                         .map(|p| p.trim_start_matches("--run-user=").to_string());
-                    parts.retain(|p| !p.starts_with("--"));
-                    let command = if parts.len() > 1 {
-                        parts[1].to_string()
+                    let (command, command_args) = if !cmd_tokens.is_empty() {
+                        (
+                            cmd_tokens[0].to_string(),
+                            cmd_tokens[1..].iter().map(|s| s.to_string()).collect(),
+                        )
                     } else {
-                        format!("/usr/local/bin/{svc_name}")
-                    };
-                    let command_args = if parts.len() > 2 {
-                        parts[2..].iter().map(|s| s.to_string()).collect()
-                    } else {
-                        vec![]
+                        (format!("/usr/local/bin/{svc_name}"), vec![])
                     };
                     Instruction::Service {
                         name: svc_name,

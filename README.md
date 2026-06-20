@@ -96,6 +96,18 @@ COPY target/release/filest /usr/local/bin/filest
 EXPOSE 8090
 ```
 
+When the service binary accepts its own flags, separate SERVICE flags from command arguments using `--` or `:`:
+
+```dockerfile
+# pass --port to the binary, not to SERVICE
+SERVICE filest --run-user=www -- /usr/local/bin/filest --port 8090 --debug
+
+# colon works the same way
+SERVICE filest --run-user=www : /usr/local/bin/filest --port 8090 --debug
+```
+
+Without a separator, tokens after the name are treated as SERVICE flags — passing `--port` directly would cause a parse error. If no command is specified, `SERVICE` defaults to `/usr/local/bin/<name>`.
+
 ```bash
 # Build the binary on host first
 cargo build --release
@@ -172,7 +184,7 @@ CMD /usr/local/sbin/nginx -g "daemon off;"
 | `ENV` | `ENV <KEY>=<VALUE>` | Set environment variable |
 | `PARAM` | `PARAM <key>=<value>` | Set jail parameter (see [jail(8)](https://man.freebsd.org/cgi/man.cgi?jail(8))) |
 | `MOUNT` | `MOUNT <src>:<dst>[:ro]` | Mount host directory (optional `:ro` suffix) |
-| `SERVICE` | `SERVICE <name> [--no-user]` | Enable service, create user/group/dirs, set persist |
+| `SERVICE` | `SERVICE <name> [--no-user] [--run-user=<user>] [-- \| :] [<cmd> [args…]]` | Enable service, create user/group/dirs, set persist. Use `--` or `:` to separate SERVICE flags from the command and its own arguments |
 | `LOG` | `LOG <path>` | Log file for `dail logs` |
 | `EXPOSE` | `EXPOSE [host:]<port>[/proto]` | Port forwarding (default tcp, overridden by `-p`) |
 | `CMD` | `CMD <command>` | Startup command (overrides SERVICE default) |
