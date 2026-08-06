@@ -53,12 +53,21 @@ pub fn run(args: TopArgs) -> anyhow::Result<()> {
         None
     };
 
+    let mut prev: CpuSamples = std::collections::HashMap::new();
+
+    // Without a watch loop there is no second sample to diff against, so take a
+    // priming one up front — otherwise CPU% would fall back to ps's useless
+    // lifetime average.
+    if !watch {
+        prime_cpu_samples(&args, &mut prev)?;
+    }
+
     loop {
         if watch {
             print!("\x1b[2J\x1b[H");
         }
 
-        print_top(&args)?;
+        print_top(&args, &mut prev)?;
 
         if !watch || !RUNNING.load(Ordering::Relaxed) {
             break;
@@ -124,21 +133,44 @@ fn wait_for_key_or_timeout(secs: u64) -> bool {
     false
 }
 
-fn print_top(args: &TopArgs) -> anyhow::Result<()> {
-    let global = GlobalConfig::load()?;
-    let lifecycle = JailLifecycle::new_readonly(global.clone())?;
+/// Per-jail CPU-time sample from the previous refresh: jid -> (cpu secs, when).
+type CpuSamples = std::collections::HashMap<i32, (f64, std::time::Instant)>;
 
-    let jails: Vec<_> = lifecycle
+const PRIME_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
+
+fn prime_cpu_samples(args: &TopArgs, prev: &mut CpuSamples) -> anyhow::Result<()> {
+    let global = GlobalConfig::load()?;
+    let lifecycle = JailLifecycle::new_readonly(global)?;
+
+    for jail in running_jails(&lifecycle, args) {
+        let jid = jail.jid.unwrap_or(0);
+        prev.insert(
+            jid,
+            (ps::jail_usage(jid).cpu_time_secs, std::time::Instant::now()),
+        );
+    }
+
+    std::thread::sleep(PRIME_DELAY);
+    Ok(())
+}
+
+fn running_jails<'a>(
+    lifecycle: &'a JailLifecycle,
+    args: &TopArgs,
+) -> Vec<&'a crate::jail::state::JailState> {
+    lifecycle
         .list()
         .into_iter()
         .filter(|j| j.status == JailStatus::Running)
-        .filter(|j| {
-            args.name
-                .as_ref()
-                .map(|n| j.name() == n)
-                .unwrap_or(true)
-        })
-        .collect();
+        .filter(|j| args.name.as_ref().map(|n| j.name() == n).unwrap_or(true))
+        .collect()
+}
+
+fn print_top(args: &TopArgs, prev: &mut CpuSamples) -> anyhow::Result<()> {
+    let global = GlobalConfig::load()?;
+    let lifecycle = JailLifecycle::new_readonly(global.clone())?;
+
+    let jails = running_jails(&lifecycle, args);
 
     if jails.is_empty() {
         if let Some(ref name) = args.name {
@@ -160,10 +192,17 @@ fn print_top(args: &TopArgs) -> anyhow::Result<()> {
         let jid = jail.jid.unwrap_or(0);
         let usage = ps::jail_usage(jid);
 
-        let cpu = if usage.nproc > 0 {
-            format!("{:.1}%", usage.cpu_percent)
-        } else {
+        let now = std::time::Instant::now();
+        let delta = prev.insert(jid, (usage.cpu_time_secs, now)).and_then(|(t0, at)| {
+            let wall = now.duration_since(at).as_secs_f64();
+            (wall > 0.0).then(|| (usage.cpu_time_secs - t0) / wall * 100.0)
+        });
+
+        let cpu = if usage.nproc == 0 {
             "-".to_string()
+        } else {
+            // First sample has no delta yet: fall back to ps's lifetime average.
+            format!("{:.1}%", delta.unwrap_or(usage.cpu_percent).max(0.0))
         };
 
         let mem = if usage.nproc > 0 {
