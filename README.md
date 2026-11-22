@@ -525,6 +525,22 @@ mirror: https://download.freebsd.org/releases
 # zfs_pool: zroot
 ```
 
+### State file permissions
+
+`state.json` includes jail environment variables. A newly created index is private
+(`0600`); atomic updates preserve the existing file permissions, including group
+read access, regardless of the caller's `umask`.
+
+To allow users in FreeBSD's `wheel` group to run read-only commands such as
+`dail ls` without `doas`, grant group read access to the index:
+
+```bash
+doas chgrp wheel /var/db/dail/state.json
+doas chmod 0640 /var/db/dail/state.json
+```
+
+The containing directories must also be traversable by those users.
+
 ## Requirements
 
 - FreeBSD 13+

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::PathBuf;
 
 use crate::error::DailError;
@@ -196,12 +197,95 @@ impl DailStore {
         let content = serde_json::to_string_pretty(&self.jails)
             .map_err(|e| DailError::Other(e.to_string()))?;
 
+        // Atomic replacement must retain access granted to existing readers,
+        // regardless of the writer's umask. New indexes contain secrets in env.
+        let permissions = match std::fs::metadata(&self.state_path) {
+            Ok(metadata) => metadata.permissions(),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                std::fs::Permissions::from_mode(0o600)
+            }
+            Err(e) => return Err(e.into()),
+        };
+
         let tmp_path = self.state_path.with_extension("json.tmp");
-        let mut tmp_file = File::create(&tmp_path)?;
+        let mut tmp_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .mode(0o600)
+            .open(&tmp_path)?;
+        tmp_file.set_permissions(permissions)?;
         tmp_file.write_all(content.as_bytes())?;
         tmp_file.sync_all()?;
 
         std::fs::rename(&tmp_path, &self.state_path)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn empty_store(state_path: PathBuf) -> DailStore {
+        DailStore {
+            jails: Vec::new(),
+            state_path,
+            jails_dir: PathBuf::new(),
+        }
+    }
+
+    #[test]
+    fn save_index_preserves_permissions_under_restrictive_umask() {
+        const CHILD_PATH: &str = "DAIL_TEST_STATE_PERMISSIONS_PATH";
+        if let Some(path) = std::env::var_os(CHILD_PATH) {
+            // Only this dedicated subprocess changes its process-wide umask.
+            unsafe {
+                libc::umask(0o077);
+            }
+            let store = empty_store(PathBuf::from(path));
+            for _ in 0..2 {
+                store.save_index().expect("save index");
+                let permissions = std::fs::metadata(&store.state_path)
+                    .expect("read permissions")
+                    .permissions();
+                assert_eq!(permissions.mode() & 0o777, 0o640);
+                assert_eq!(
+                    std::fs::read_to_string(&store.state_path).expect("read index"),
+                    "[]"
+                );
+            }
+            return;
+        }
+
+        let directory = tempfile::tempdir().expect("create test directory");
+        let path = directory.path().join("state.json");
+        std::fs::write(&path, "[]").expect("create index");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640))
+            .expect("grant group read access");
+        let status = std::process::Command::new(std::env::current_exe().expect("test binary"))
+            .args([
+                "--exact",
+                "store::tests::save_index_preserves_permissions_under_restrictive_umask",
+            ])
+            .env(CHILD_PATH, &path)
+            .status()
+            .expect("run restrictive-umask child");
+        assert!(status.success());
+    }
+
+    #[test]
+    fn new_index_is_private() {
+        let directory = tempfile::tempdir().expect("create test directory");
+        let store = empty_store(directory.path().join("state.json"));
+        store.save_index().expect("save index");
+        assert_eq!(
+            std::fs::metadata(&store.state_path)
+                .expect("index metadata")
+                .permissions()
+                .mode()
+                & 0o777,
+            0o600
+        );
     }
 }
