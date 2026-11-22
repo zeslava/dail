@@ -1,4 +1,5 @@
 use crate::jail::state::{JailState, JailStatus};
+use crate::jail::config::JailConfig;
 use crate::network::NetworkConfig;
 use std::io::IsTerminal;
 
@@ -101,6 +102,63 @@ fn strip_ansi(s: &str) -> String {
     out
 }
 
+fn format_inherited_ports(config: &JailConfig, listeners: Option<Vec<String>>) -> String {
+    if let Some(ports) = listeners {
+        return if ports.is_empty() {
+            "-".to_string()
+        } else {
+            ports.join(", ")
+        };
+    }
+
+    // Configuration is only a hint when the jail is stopped or inspection fails.
+    if let Some(port) = config
+        .env
+        .get("PORT")
+        .and_then(|value| value.trim().parse::<u16>().ok())
+        .filter(|&port| port != 0)
+    {
+        return format!("{port} (env)");
+    }
+
+    let ports: std::collections::BTreeSet<_> = config
+        .ports
+        .iter()
+        .map(|p| (p.jail_port, p.proto.as_str()))
+        .collect();
+    if ports.is_empty() {
+        "-".to_string()
+    } else {
+        let ports = ports
+            .into_iter()
+            .map(|(port, proto)| format!("{port}/{proto}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!("{ports} (config)")
+    }
+}
+
+fn format_ports(jail: &JailState) -> String {
+    match &jail.config.network {
+        NetworkConfig::Alias { .. } => jail
+            .config
+            .ports
+            .iter()
+            .map(|p| format!("{}->{}/{}", p.host_port, p.jail_port, p.proto))
+            .collect::<Vec<_>>()
+            .join(", "),
+        NetworkConfig::Inherit => {
+            let listeners = if matches!(jail.status, JailStatus::Running | JailStatus::Idle) {
+                jail.jid.and_then(crate::freebsd::ps::jail_listening_ports)
+            } else {
+                None
+            };
+            format_inherited_ports(&jail.config, listeners)
+        }
+        NetworkConfig::Vnet { .. } | NetworkConfig::None => "-".to_string(),
+    }
+}
+
 pub fn print_table(jails: &[&JailState]) {
     if jails.is_empty() {
         println!("No jails found.");
@@ -128,14 +186,7 @@ pub fn print_table(jails: &[&JailState]) {
             NetworkConfig::None => "none".to_string(),
         };
 
-        let ports = if jail.config.ports.is_empty() {
-            String::new()
-        } else {
-            jail.config.ports.iter()
-                .map(|p| format!("{}->{}/{}", p.host_port, p.jail_port, p.proto))
-                .collect::<Vec<_>>()
-                .join(", ")
-        };
+        let ports = format_ports(jail);
 
         table.add_row(vec![
             jail.name().to_string(),
@@ -162,4 +213,61 @@ pub fn print_json(jails: &[&JailState]) -> anyhow::Result<()> {
     let json = serde_json::to_string_pretty(&jails)?;
     println!("{json}");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::jail::config::PortMapping;
+
+    fn demo_config() -> JailConfig {
+        let mut config = JailConfig::new("aurora-demo".into());
+        config.env.insert("PORT".into(), "4001".into());
+        config.ports.push(PortMapping {
+            host_ip: None,
+            host_port: 4000,
+            jail_port: 4000,
+            proto: "tcp".into(),
+        });
+        config
+    }
+
+    #[test]
+    fn observed_ports_override_configuration_and_empty_result_is_authoritative() {
+        let config = demo_config();
+        assert_eq!(
+            format_inherited_ports(&config, Some(vec!["5000/tcp".into()])),
+            "5000/tcp"
+        );
+        assert_eq!(format_inherited_ports(&config, Some(vec![])), "-");
+    }
+
+    #[test]
+    fn failed_inspection_prefers_valid_port_env_and_labels_the_hint() {
+        let mut config = demo_config();
+        assert_eq!(format_inherited_ports(&config, None), "4001 (env)");
+        for value in ["", "0", "65536", "not-a-port"] {
+            config.env.insert("PORT".into(), value.into());
+            assert_eq!(format_inherited_ports(&config, None), "4000/tcp (config)");
+        }
+        config.env.clear();
+        config.ports.clear();
+        assert_eq!(format_inherited_ports(&config, None), "-");
+    }
+
+    #[test]
+    fn stopped_inherit_uses_hints_and_alias_retains_forwarding_notation() {
+        let mut jail = JailState::new(demo_config(), std::path::PathBuf::from("/unused"));
+        jail.status = JailStatus::Stopped;
+        // A stopped jail must not probe any retained JID.
+        jail.jid = Some(12345);
+        assert_eq!(format_ports(&jail), "4001 (env)");
+        jail.config.network = NetworkConfig::Alias {
+            ip: "10.100.0.11/24".into(),
+            interface: "lo0".into(),
+        };
+        assert_eq!(format_ports(&jail), "4000->4000/tcp");
+        jail.config.network = NetworkConfig::None;
+        assert_eq!(format_ports(&jail), "-");
+    }
 }

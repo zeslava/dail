@@ -475,6 +475,19 @@ EXPOSE 8080:80
 
 If `-p` is passed on the CLI, all `EXPOSE` directives are ignored.
 
+PF port forwarding is only configured for **IP alias** networking. The `PORTS`
+column in `dail ls` lists configured mappings for that mode (it does not verify PF
+rules). For **inherit**, it shows visible TCP/UDP listening ports from
+[`sockstat -46ln -j <jid>`](https://man.freebsd.org/cgi/man.cgi?query=sockstat&sektion=1),
+for example `4001/tcp`, with duplicate IPv4/IPv6 and worker sockets combined.
+These are local listeners, not a guarantee of external reachability; visibility
+depends on process permissions. An empty successful inspection shows `-`.
+
+When socket inspection fails or the jail is stopped, a valid `PORT` environment
+variable is shown as `4001 (env)`. Otherwise, declared jail ports from `EXPOSE` or
+`-p` are shown as `4000/tcp (config)`. Both labels mark unverified hints, with no
+port remapping implied. VNET and disabled networking currently show `-`.
+
 ### Host Network (inherit)
 
 Share the host's network stack:
@@ -482,6 +495,11 @@ Share the host's network stack:
 ```bash
 dail create legacy --network inherit
 ```
+
+`EXPOSE` and `-p` do not remap ports in this mode. Configure the application's
+listening port directly, for example `-e PORT=4001` for an application that reads
+`PORT`. A Dailfile containing `EXPOSE 4000` does not force it to listen on 4000.
+To inspect actual listeners, use `dail exec legacy sockstat -4 -6 -l`.
 
 ### No Network (isolated)
 

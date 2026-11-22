@@ -1,4 +1,53 @@
+use std::collections::BTreeSet;
 use std::process::Command;
+
+/// Inspect IPv4/IPv6 listeners owned by a jail, including inherited networking.
+/// None means inspection failed; an empty list means no visible listeners.
+pub fn jail_listening_ports(jid: i32) -> Option<Vec<String>> {
+    // JID 0 selects the host, so never probe a missing or invalid jail ID.
+    if jid <= 0 {
+        return None;
+    }
+    let output = Command::new("sockstat")
+        .args(["-46ln", "-j", &jid.to_string()])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    Some(parse_listening_ports(&String::from_utf8_lossy(
+        &output.stdout,
+    )))
+}
+
+fn parse_listening_ports(stdout: &str) -> Vec<String> {
+    let mut ports = BTreeSet::new();
+    for line in stdout.lines() {
+        let mut fields = line.split_whitespace();
+        // USER COMMAND PID FD PROTO LOCAL-ADDRESS FOREIGN-ADDRESS
+        let protocol = match fields.nth(4) {
+            Some("tcp4" | "tcp6" | "tcp46") => "tcp",
+            Some("udp4" | "udp6" | "udp46") => "udp",
+            _ => continue,
+        };
+        let Some(local) = fields.next() else { continue };
+        if fields.next() != Some("*:*") {
+            continue;
+        }
+        let Some(port) = local
+            .rsplit_once(':')
+            .and_then(|(_, port)| port.parse::<u16>().ok())
+            .filter(|&port| port != 0)
+        else {
+            continue;
+        };
+        ports.insert((port, protocol));
+    }
+    ports
+        .into_iter()
+        .map(|(port, protocol)| format!("{port}/{protocol}"))
+        .collect()
+}
 
 #[derive(Debug, Default)]
 pub struct JailResourceUsage {
@@ -88,5 +137,49 @@ pub fn jail_usage(jid: i32) -> JailResourceUsage {
         cpu_time_secs: total_time,
         mem_kb: total_rss,
         nproc,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_sockstat_listeners_and_deduplicates_families_and_workers() {
+        let output = "USER COMMAND PID FD PROTO LOCAL ADDRESS FOREIGN ADDRESS
+root aurora 16427 12 tcp4 *:4001 *:*
+root aurora 16427 13 tcp6 :::4001 *:*
+root worker 16428 12 tcp4 *:4001 *:*
+root dns 200 3 udp4 127.0.0.1:53 *:*
+root dns 200 4 tcp6 ::1:53 *:*
+root app 300 5 tcp46 *:8080 *:*
+root app 300 6 udp6 fe80::1%lo0:8080 *:*
+root app 300 7 tcp4 192.168.1.100:51234 203.0.113.1:443
+";
+        assert_eq!(
+            parse_listening_ports(output),
+            ["53/tcp", "53/udp", "4001/tcp", "8080/tcp", "8080/udp"]
+        );
+    }
+
+    #[test]
+    fn ignores_headers_unix_sockets_and_invalid_ports() {
+        let output = "USER COMMAND PID FD PROTO LOCAL ADDRESS FOREIGN ADDRESS
+root app 1 3 stream /tmp/app.sock
+root app 1 4 tcp4 *:* *:*
+root app 1 5 tcp4 *:0 *:*
+root app 1 6 tcp4 *:65536 *:*
+root app 1 7 tcp4 no-address *:*
+root app 1 8 tcp4
+garbage
+";
+        assert!(parse_listening_ports(output).is_empty());
+        assert!(parse_listening_ports("").is_empty());
+    }
+
+    #[test]
+    fn never_queries_host_sockets_for_invalid_jid() {
+        assert_eq!(jail_listening_ports(0), None);
+        assert_eq!(jail_listening_ports(-1), None);
     }
 }
